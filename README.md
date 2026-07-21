@@ -1,80 +1,41 @@
 # Sentinel Lock
 
-> Intelligent workstation security through automatic presence detection.
+> Lightweight workstation security through automatic idle detection.
 
 ## Overview
 
-Sentinel Lock is an open-source desktop security application that automatically locks a workstation when the authorized user is no longer actively using the computer.
+Sentinel Lock is an open-source desktop security application that automatically locks a Windows workstation after a configurable period of keyboard and mouse inactivity.
 
-The project is designed to improve workstation security by combining idle detection with optional presence-awareness technologies such as webcam detection, Bluetooth proximity, and face recognition.
+The project is designed to provide a simple, lightweight, and reliable way to secure unattended Windows computers.
 
-## Features
+## Current Features
 
-### Current
-
-* Automatic workstation locking after user inactivity
+* Automatic Windows workstation locking
 * Keyboard activity monitoring
-* Mouse activity monitoring
+* Mouse movement monitoring
+* Mouse click monitoring
 * Configurable idle timeout
 * Lightweight background execution
-* Windows startup support
+* Low CPU and memory usage
 
-### Planned
+## Future Enhancements
 
-* Webcam-based user presence detection
+Planned enhancements include:
+
+* Computer vision-based presence detection
 * Face recognition
 * Bluetooth phone proximity detection
-* Wi-Fi device presence detection
-* Smart confidence scoring to reduce false locks
+* Trusted device detection
+* Smart lock decision engine
 * System tray application
-* Notification before locking
+* Desktop notifications
 * Event logging
-* Multi-monitor support
-* Cross-platform support
-
-## Roadmap
-
-### Phase 1 — Core Security
-
-* Idle detection engine
-* Automatic workstation locking
-* Configuration system
-* Logging
-
-### Phase 2 — Presence Detection
-
-* Webcam monitoring
-* Human presence detection
-* Face recognition
-* Smart lock decisions
-
-### Phase 3 — Device Awareness
-
-* Bluetooth proximity
-* Wi-Fi presence
-* Trusted devices
-* Adaptive security
-
-### Phase 4 — Desktop Experience
-
-* System tray integration
-* Settings interface
-* Notification system
-* Startup manager
-
-### Phase 5 — Enterprise
-
-* Security policies
-* Centralized configuration
-* Audit logs
 * Cross-platform support
 
 ## Technology Stack
 
 * Python
 * Windows API
-* OpenCV
-* PyWin32
 * Pynput
 * Psutil
 
@@ -82,10 +43,8 @@ The project is designed to improve workstation security by combining idle detect
 
 ```text
 sentinel-lock/
-│
 ├── src/
 ├── config/
-├── assets/
 ├── tests/
 ├── docs/
 ├── requirements.txt
@@ -93,27 +52,9 @@ sentinel-lock/
 └── README.md
 ```
 
-## Use Cases
-
-* Personal workstation security
-* Office environments
-* Shared computers
-* Research laboratories
-* Development workstations
-* Educational institutions
-
-## Goals
-
-* Lightweight
-* Privacy-first
-* Easy to configure
-* Open source
-* Reliable automatic locking
-* Minimal resource usage
-
 ## Contributing
 
-Contributions are welcome. Bug reports, feature requests, documentation improvements, and pull requests are appreciated.
+Contributions, bug reports, feature requests, and pull requests are welcome.
 
 ## License
 
