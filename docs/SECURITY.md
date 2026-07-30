@@ -14,7 +14,7 @@ The application does not intentionally store or transmit:
 
 - key values or typed text;
 - mouse buttons or pointer coordinates;
-- screenshots, camera frames, audio, or clipboard data;
+- clipboard data;
 - application names, document contents, or browsing history.
 
 Input adapters translate all callbacks into one of three categories:
@@ -51,7 +51,6 @@ run it from an untrusted working directory.
   `pynput`.
 - System suspend and resume behavior should be validated on each target device.
 - Malware or an administrator can stop or alter a user-level process.
-- Presence detection and trusted-device proximity are not implemented.
 
 ## Reporting a vulnerability
 

@@ -93,10 +93,16 @@ shared `threading.Event`, then stops and joins listeners with a bounded timeout.
 No callback performs file I/O, Windows locking, configuration parsing, or
 network activity.
 
-## Extension points
+## Module boundaries
 
-Future presence or trusted-device providers should publish a separate
-privacy-preserving signal to a decision engine. They must not write directly to
-the activity manager or bypass the workstation locker. This keeps input
-activity, presence confidence, policy, and platform actions independently
-testable.
+Keyboard presses, mouse movement, and mouse clicks are the only supported
+activity sources. New code must preserve the existing flow:
+
+1. keyboard and mouse adapters publish an `ActivityKind`;
+2. `ActivityManager` serializes activity state;
+3. `IdleLockController` evaluates the timeout;
+4. `WindowsWorkstationLocker` performs the platform action.
+
+Input adapters must not bypass the activity manager, and policy code must not
+call Windows APIs directly. These boundaries keep input monitoring, idle policy,
+and workstation locking independently testable.

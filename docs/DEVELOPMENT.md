@@ -51,13 +51,13 @@ The suite uses:
 
 Unit tests must never call `LockWorkStation` or attach real keyboard/mouse hooks.
 
-## Adding a new signal provider
+## Modifying an input monitor
 
-Presence and device-proximity providers should implement their own adapter and
-publish minimal state to a future decision engine. A provider must define:
+The runtime supports keyboard presses, mouse movement, and mouse clicks only.
+Any monitor change must:
 
-1. its local data source;
-2. data-retention rules;
-3. error and unavailable states;
-4. sampling and CPU limits;
-5. deterministic tests with no hardware dependency.
+1. publish one of the existing `ActivityKind` values;
+2. discard raw key, button, and pointer data;
+3. keep callbacks constant-time;
+4. preserve start, stop, and bounded-join behaviour;
+5. include deterministic tests with fake listeners.

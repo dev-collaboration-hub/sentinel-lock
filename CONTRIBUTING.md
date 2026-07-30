@@ -16,8 +16,8 @@ Thank you for helping improve Sentinel Lock.
 - update relevant documentation;
 - avoid unrelated formatting or dependency changes.
 
-Input contents, pointer coordinates, screenshots, and user activity histories
-must never be logged or committed as fixtures.
+Input contents, pointer coordinates, and user activity histories must never be
+logged or committed as fixtures.
 
 By contributing, you agree that your contribution is licensed under the MIT
 License.

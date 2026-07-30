@@ -38,14 +38,14 @@ Status: implemented in the initial MVP.
 
 Status: core runtime implemented; startup registration and tray controls remain.
 
-## M5 — Presence-Aware Decisions
+## M5 — Input Reliability and Performance
 
-- local-only human-presence provider;
-- optional authorized-user verification;
-- optional trusted Bluetooth device proximity;
-- explicit unknown/unavailable signal states;
-- confidence policy designed to avoid false locks;
-- privacy and performance evaluation.
+- high-frequency mouse movement stress testing;
+- listener recovery after transient input-hook failure;
+- Windows suspend and resume handling;
+- bounded CPU and memory benchmarks;
+- long-running stability tests;
+- protection against duplicate lock requests.
 
 Status: planned.
 

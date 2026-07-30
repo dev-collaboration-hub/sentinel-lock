@@ -2,12 +2,10 @@
 
 > Privacy-first automatic workstation locking for Windows.
 
-![Sentinel Lock overview](files.png)
-
 Sentinel Lock protects an unattended Windows workstation by monitoring local
 keyboard and mouse activity and locking the session after a configurable idle
 period. Activity is processed in memory; the application does not record keys,
-buttons, pointer coordinates, screenshots, or user content.
+buttons, pointer coordinates, or user content.
 
 ## Status
 
@@ -21,8 +19,8 @@ The initial MVP provides:
 - a dry-run mode for safe configuration checks;
 - unit tests for the core security and timing logic.
 
-Presence detection, trusted-device proximity, a system tray interface, and
-adaptive lock decisions remain roadmap items.
+The project scope is intentionally limited to keyboard activity, mouse activity,
+idle-time evaluation, and Windows workstation locking.
 
 ## Requirements
 
