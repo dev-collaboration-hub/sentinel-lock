@@ -91,6 +91,7 @@ sentinel-lock/
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Activity Manager module](docs/modules/ACTIVITY_MANAGER.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Security model](docs/SECURITY.md)
 - [Development guide](docs/DEVELOPMENT.md)
