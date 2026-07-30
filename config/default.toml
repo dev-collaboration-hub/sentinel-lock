@@ -1,0 +1,11 @@
+[security]
+idle_timeout_seconds = 300
+
+[runtime]
+poll_interval_seconds = 1.0
+
+[logging]
+level = "INFO"
+file = "logs/sentinel-lock.log"
+max_bytes = 1048576
+backup_count = 3
