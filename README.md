@@ -1,26 +1,45 @@
 # Sentinel Lock
 
-> Privacy-first automatic workstation locking for Windows.
+> Privacy-first adaptive workstation locking for Windows.
 
-Sentinel Lock protects an unattended Windows workstation by monitoring local
-keyboard and mouse activity and locking the session after a configurable idle
-period. Activity is processed in memory; the application does not record keys,
-buttons, pointer coordinates, or user content.
+Sentinel Lock protects an unattended Windows workstation using lightweight local
+signals. Keyboard and mouse inactivity provide the working baseline, while a
+small decision layer allows local presence and trusted-device signals to be
+combined without coupling them to the Windows locking code.
 
-## Status
+## Current status
 
-The initial MVP provides:
+Implemented today:
 
 - thread-safe keyboard and mouse activity tracking;
 - configurable idle detection;
 - native Windows workstation locking;
+- a simple smart-lock decision engine;
+- optional `user_present` and `trusted_device_nearby` decision inputs;
 - graceful background-service lifecycle;
 - rotating operational logs with no raw input data;
-- a dry-run mode for safe configuration checks;
-- unit tests for the core security and timing logic.
+- dry-run configuration checks;
+- unit tests for activity, timing, lock decisions, and failure handling.
 
-The project scope is intentionally limited to keyboard activity, mouse activity,
-idle-time evaluation, and Windows workstation locking.
+If no extra presence signal is connected, Sentinel Lock keeps the existing
+idle-time behavior. Unknown signals never disable the baseline protection.
+
+## Project direction
+
+Sentinel Lock is not limited to keyboard and mouse inactivity. The architecture
+is intended to support additional local security signals such as:
+
+- computer-vision presence detection;
+- local face recognition;
+- Bluetooth phone proximity;
+- trusted-device detection;
+- smarter multi-signal lock decisions;
+- system tray controls and desktop notifications;
+- cross-platform support.
+
+These adapters should remain optional and local-first. Raw keystrokes, pointer
+coordinates, camera frames, and private user content must not be logged or sent
+remotely by the core application.
 
 ## Requirements
 
@@ -79,10 +98,11 @@ sentinel-lock/
 ├── src/sentinel_lock/       Application package
 │   ├── monitors/            Keyboard and mouse adapters
 │   ├── activity.py          Thread-safe activity state
+│   ├── decision.py          Small multi-signal lock decision policy
 │   ├── app.py               Runtime orchestration
 │   ├── cli.py               Command-line interface
 │   ├── config.py            TOML configuration loader
-│   ├── idle.py              Idle policy and lock controller
+│   ├── idle.py              Idle tracking and lock controller
 │   ├── locker.py            Windows locking adapter
 │   └── logging_setup.py     Privacy-safe rotating logs
 └── tests/                   Cross-platform unit tests
@@ -110,8 +130,7 @@ the workstation or require an active desktop session.
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Keep
-changes small, include tests, and never add input-content logging or remote
-telemetry.
+changes small, include tests, and preserve the privacy-first local architecture.
 
 ## License
 
