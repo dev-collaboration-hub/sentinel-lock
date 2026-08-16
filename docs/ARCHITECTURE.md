@@ -2,17 +2,20 @@
 
 ## Design goals
 
-Sentinel Lock is designed around five properties:
+Sentinel Lock is designed around six properties:
 
 1. **Fail safely:** a failed lock request is reported and retried; it is never
    reported as successful.
 2. **Remain lightweight:** input callbacks perform one small, thread-safe state
    update and return immediately.
-3. **Preserve privacy:** only event category and timing state are retained.
-4. **Stay testable:** clocks, input listeners, and the workstation locker are
-   replaceable at component boundaries.
-5. **Keep policy separate from platform code:** idle decisions do not depend on
-   Windows API or `pynput` details.
+3. **Preserve privacy:** only the minimum state required for a lock decision is
+   retained by the core application.
+4. **Stay testable:** clocks, input listeners, optional signal readers, and the
+   workstation locker are replaceable at component boundaries.
+5. **Keep decisions separate from platform code:** policy code does not call
+   Windows APIs directly.
+6. **Grow through small adapters:** new presence or trusted-device sources feed
+   the decision layer instead of creating separate locking paths.
 
 ## Runtime flow
 
@@ -20,26 +23,29 @@ Sentinel Lock is designed around five properties:
 flowchart TD
     K["Keyboard listener"] --> A["Activity manager"]
     M["Mouse listener"] --> A
-    A --> I["Idle lock controller"]
-    C["Validated configuration"] --> I
-    I --> L["Windows locker"]
-    I --> O["Operational log"]
+    A --> C["Lock controller"]
+    P["Optional local presence signals"] --> C
+    C --> D["Smart lock decision engine"]
+    D --> L["Windows locker"]
+    C --> O["Operational log"]
 ```
 
-The keyboard and mouse listeners publish activity categories to a shared
-`ActivityManager`. The manager stores a monotonic timestamp and an incrementing
-sequence number behind a lock. `IdleLockController` polls that state at a
-bounded interval and calls `WindowsWorkstationLocker` once per idle episode.
+Keyboard and mouse listeners publish activity categories to a shared
+`ActivityManager`. The manager stores a monotonic timestamp and sequence number.
+The controller calculates idle time, reads optional local presence signals, and
+asks `SmartLockDecisionEngine` whether a lock should be requested.
 
-New activity changes the sequence number and rearms the controller for a future
-idle episode.
+Without an extra signal reader, the decision engine behaves exactly like the
+original idle-time policy. A positive `user_present` or
+`trusted_device_nearby` signal can keep an attended workstation unlocked after
+the idle threshold.
 
 ## Components
 
 ### Activity manager
 
-`sentinel_lock.activity.ActivityManager` is the single source of truth for the
-latest user activity. It provides immutable snapshots so consumers never read
+`sentinel_lock.activity.ActivityManager` is the source of truth for keyboard and
+mouse activity. It provides immutable snapshots so consumers never read
 partially updated state.
 
 Monotonic time is used for idle calculations. This prevents wall-clock
@@ -49,60 +55,69 @@ idle durations.
 ### Input monitors
 
 `KeyboardMonitor` and `MouseMonitor` adapt `pynput` callbacks to activity
-events. The mouse adapter shares one OS listener for both movement and click
-events to avoid duplicate hooks.
-
-The adapters deliberately discard the key, button, pointer location, and click
+events. They deliberately discard the key, button, pointer location, and click
 coordinates supplied by `pynput`.
 
-### Idle lock controller
+### Smart lock decision engine
 
-`IdleLockController` contains the decision policy:
+`sentinel_lock.decision.SmartLockDecisionEngine` is intentionally small. It
+combines:
 
-- active while `idle_seconds < idle_timeout_seconds`;
-- request one lock when the threshold is reached;
-- do not request another lock until new activity is observed;
-- keep the service alive if the platform lock call fails.
+- idle time;
+- optional local user-presence state;
+- optional trusted-device proximity state.
 
-The controller accepts a fake clock and a fake locker in tests.
+Unknown optional signals do not disable the idle-lock baseline. Future computer
+vision, face-recognition, Bluetooth, or trusted-device adapters should expose
+simple local state to this layer instead of containing their own lock policy.
+
+### Lock controller
+
+`IdleLockController` remains the runtime controller for compatibility. It:
+
+- observes activity and calculates idle time;
+- reads optional supplemental signals;
+- delegates the final decision to `SmartLockDecisionEngine`;
+- requests at most one lock per idle episode;
+- rearms after new keyboard or mouse activity;
+- keeps the service alive if the platform lock call fails.
 
 ### Windows locker
 
-`WindowsWorkstationLocker` is the only component that calls a Windows API. It
-invokes `user32!LockWorkStation` through Python's standard `ctypes` module and
-checks the native return value.
-
-`DryRunWorkstationLocker` provides the same interface without changing session
-state.
+`WindowsWorkstationLocker` is the only component that calls the Windows lock
+API. `DryRunWorkstationLocker` provides the same interface without changing
+session state.
 
 ### Configuration and logging
 
-Configuration is loaded from TOML, type-checked, range-checked, and converted to
-an immutable `AppConfig`.
+Configuration is loaded from TOML, validated, and converted to an immutable
+`AppConfig`. TOML is only a configuration format; it is not part of lock
+policy.
 
-Logs are bounded through rotation. They contain lifecycle, policy, and error
-events only; input content and pointer coordinates are prohibited.
+Logs are bounded through rotation. Raw input content, pointer coordinates,
+camera frames, face images, and private user content must not be written by the
+core logging path.
 
 ## Concurrency model
 
 `pynput` invokes callbacks from listener threads. Each callback performs a
-constant-time update protected by `threading.Lock`. The idle controller runs in
-the foreground service thread and reads an immutable snapshot. Shutdown uses a
-shared `threading.Event`, then stops and joins listeners with a bounded timeout.
+constant-time update protected by `threading.Lock`. The lock controller runs in
+the foreground service thread and reads immutable state. Shutdown uses a shared
+`threading.Event`, then stops and joins listeners with a bounded timeout.
 
-No callback performs file I/O, Windows locking, configuration parsing, or
-network activity.
+Optional signal adapters should do expensive work outside input callbacks and
+expose only the small state needed by the decision engine.
 
 ## Module boundaries
 
-Keyboard presses, mouse movement, and mouse clicks are the only supported
-activity sources. New code must preserve the existing flow:
+The supported flow is:
 
-1. keyboard and mouse adapters publish an `ActivityKind`;
-2. `ActivityManager` serializes activity state;
-3. `IdleLockController` evaluates the timeout;
-4. `WindowsWorkstationLocker` performs the platform action.
+1. keyboard and mouse adapters update `ActivityManager`;
+2. optional local adapters expose presence or trusted-device state;
+3. `IdleLockController` gathers current state;
+4. `SmartLockDecisionEngine` decides whether locking is appropriate;
+5. `WindowsWorkstationLocker` performs the platform action.
 
-Input adapters must not bypass the activity manager, and policy code must not
-call Windows APIs directly. These boundaries keep input monitoring, idle policy,
-and workstation locking independently testable.
+New signal sources should plug into step 2. They must not bypass the decision
+engine or call the Windows locker directly. This keeps Sentinel Lock simple
+while allowing the original smart-lock direction to grow safely.
