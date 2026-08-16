@@ -8,54 +8,70 @@
 - thread-safe centralized activity state;
 - listener lifecycle and deterministic tests.
 
-Status: implemented in the initial MVP.
+Status: implemented.
 
-## M2 — Idle Detection Engine
+## M2 — Idle Detection and Windows Locking
 
 - configurable monotonic idle timer;
-- one lock decision per idle episode;
+- one lock request per idle episode;
 - recovery after new activity;
+- native `LockWorkStation` adapter;
+- dry-run safety mode;
 - deterministic threshold and failure tests.
 
-Status: implemented in the initial MVP.
+Status: implemented.
 
-## M3 — Windows Lock Integration
+## M3 — Smart Lock Decision Foundation
 
-- native `LockWorkStation` adapter;
-- platform validation;
-- dry-run safety mode;
-- clear native failure reporting.
+- keep idle locking as the safe baseline;
+- separate lock decisions from Windows platform code;
+- accept optional local `user_present` signal;
+- accept optional local `trusted_device_nearby` signal;
+- preserve existing behavior when extra signals are unavailable.
 
-Status: implemented in the initial MVP.
+Status: implemented.
 
-## M4 — Runtime Operations
+## M4 — Local Presence Signals
 
-- validated TOML configuration;
-- command-line overrides;
-- privacy-safe rotating logs;
-- graceful startup and shutdown;
-- optional Windows startup registration and system tray controls.
+- computer-vision presence adapter;
+- optional local face-recognition adapter;
+- Bluetooth phone proximity adapter;
+- trusted-device adapter;
+- privacy rules for every signal source;
+- deterministic adapter tests.
 
-Status: core runtime implemented; startup registration and tray controls remain.
+Status: planned. Adapters must remain optional and feed the existing decision
+engine instead of duplicating lock policy.
 
-## M5 — Input Reliability and Performance
+## M5 — Runtime Experience
 
-- high-frequency mouse movement stress testing;
+- system tray controls;
+- desktop notifications;
+- optional Windows startup registration;
+- suspend and resume handling;
+- clear signal and lock status without exposing private input data.
+
+Status: planned.
+
+## M6 — Reliability and Performance
+
+- high-frequency input stress testing;
 - listener recovery after transient input-hook failure;
-- Windows suspend and resume handling;
 - bounded CPU and memory benchmarks;
 - long-running stability tests;
+- multi-signal failure handling;
 - protection against duplicate lock requests.
 
 Status: planned.
 
-## M6 — Release Hardening
+## M7 — Release Hardening
 
 - signed Windows packaging;
-- suspend/resume and multi-user validation;
+- multi-user validation;
 - accessibility and power-consumption testing;
 - threat-model review;
 - installation, upgrade, and removal documentation;
-- stable v1.0 release.
+- stable v1.0 release;
+- evaluate cross-platform adapters without complicating the Windows core.
 
 Status: planned.
