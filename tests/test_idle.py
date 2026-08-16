@@ -2,6 +2,7 @@ import logging
 import unittest
 
 from sentinel_lock.activity import ActivityKind, ActivityManager
+from sentinel_lock.decision import PresenceSignals
 from sentinel_lock.idle import ControllerState, IdleLockController
 from tests.helpers import FakeClock, RecordingLocker
 
@@ -60,6 +61,23 @@ class IdleLockControllerTests(unittest.TestCase):
         self.assertEqual(active.state, ControllerState.ACTIVE)
         self.assertTrue(locked_again.lock_requested)
         self.assertEqual(self.locker.calls, 2)
+
+    def test_presence_signal_can_hold_workstation_unlocked(self) -> None:
+        controller = IdleLockController(
+            self.manager,
+            self.locker,
+            idle_timeout_seconds=10,
+            poll_interval_seconds=1,
+            clock=self.clock,
+            signal_reader=lambda: PresenceSignals(user_present=True),
+        )
+        self.clock.advance(10)
+
+        evaluation = controller.evaluate_once()
+
+        self.assertFalse(evaluation.lock_requested)
+        self.assertEqual(evaluation.state, ControllerState.ACTIVE)
+        self.assertEqual(self.locker.calls, 0)
 
     def test_failed_lock_is_not_marked_successful_and_can_retry(self) -> None:
         self.locker.error = RuntimeError("native failure")
