@@ -1,4 +1,4 @@
-"""Idle policy and automatic-lock controller."""
+"""Idle tracking and automatic-lock controller."""
 
 from __future__ import annotations
 
@@ -10,10 +10,11 @@ from time import monotonic
 from typing import Callable, Protocol
 
 from sentinel_lock.activity import ActivityManager
+from sentinel_lock.decision import PresenceSignals, SmartLockDecisionEngine
 
 
 class WorkstationLocker(Protocol):
-    """Platform action used by the idle controller."""
+    """Platform action used by the lock controller."""
 
     def lock(self) -> None:
         """Request a workstation lock or raise on failure."""
@@ -33,7 +34,7 @@ class IdleEvaluation:
 
 
 class IdleLockController:
-    """Evaluate idle policy and request one lock per idle episode."""
+    """Evaluate lock policy and request at most one lock per idle episode."""
 
     def __init__(
         self,
@@ -44,6 +45,8 @@ class IdleLockController:
         poll_interval_seconds: float,
         clock: Callable[[], float] = monotonic,
         logger: logging.Logger | None = None,
+        decision_engine: SmartLockDecisionEngine | None = None,
+        signal_reader: Callable[[], PresenceSignals] | None = None,
     ) -> None:
         if idle_timeout_seconds <= 0:
             raise ValueError("idle_timeout_seconds must be positive")
@@ -52,10 +55,13 @@ class IdleLockController:
 
         self._activity_manager = activity_manager
         self._locker = locker
-        self._idle_timeout_seconds = idle_timeout_seconds
         self._poll_interval_seconds = poll_interval_seconds
         self._clock = clock
         self._logger = logger or logging.getLogger(__name__)
+        self._decision_engine = decision_engine or SmartLockDecisionEngine(
+            idle_timeout_seconds
+        )
+        self._signal_reader = signal_reader
         self._observed_sequence = activity_manager.snapshot().sequence
         self._armed = True
         self._state = ControllerState.ACTIVE
@@ -74,8 +80,9 @@ class IdleLockController:
             self._state = ControllerState.ACTIVE
 
         idle_seconds = snapshot.idle_seconds(self._clock())
+        signals = self._signal_reader() if self._signal_reader is not None else None
         lock_requested = False
-        if idle_seconds >= self._idle_timeout_seconds and self._armed:
+        if self._armed and self._decision_engine.should_lock(idle_seconds, signals):
             try:
                 self._locker.lock()
             except Exception:
