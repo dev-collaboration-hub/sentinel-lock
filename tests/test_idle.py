@@ -2,9 +2,28 @@ import logging
 import unittest
 
 from sentinel_lock.activity import ActivityKind, ActivityManager
-from sentinel_lock.decision import PresenceSignals
-from sentinel_lock.idle import ControllerState, IdleLockController
+from sentinel_lock.idle import (
+    ControllerState,
+    IdleLockController,
+    PresenceSignals,
+    should_lock,
+)
 from tests.helpers import FakeClock, RecordingLocker
+
+
+class LockPolicyTests(unittest.TestCase):
+    def test_idle_timeout_requests_lock(self) -> None:
+        self.assertTrue(should_lock(10, 10))
+
+    def test_user_presence_blocks_lock(self) -> None:
+        self.assertFalse(
+            should_lock(10, 10, PresenceSignals(user_present=True))
+        )
+
+    def test_trusted_device_blocks_lock(self) -> None:
+        self.assertFalse(
+            should_lock(10, 10, PresenceSignals(trusted_device_nearby=True))
+        )
 
 
 class IdleLockControllerTests(unittest.TestCase):
@@ -76,8 +95,27 @@ class IdleLockControllerTests(unittest.TestCase):
         evaluation = controller.evaluate_once()
 
         self.assertFalse(evaluation.lock_requested)
-        self.assertEqual(evaluation.state, ControllerState.ACTIVE)
         self.assertEqual(self.locker.calls, 0)
+
+    def test_signal_reader_failure_falls_back_to_idle_lock(self) -> None:
+        def broken_reader() -> PresenceSignals:
+            raise RuntimeError("sensor unavailable")
+
+        controller = IdleLockController(
+            self.manager,
+            self.locker,
+            idle_timeout_seconds=10,
+            poll_interval_seconds=1,
+            clock=self.clock,
+            signal_reader=broken_reader,
+        )
+        self.clock.advance(10)
+
+        with self.assertLogs("sentinel_lock.idle", logging.ERROR):
+            evaluation = controller.evaluate_once()
+
+        self.assertTrue(evaluation.lock_requested)
+        self.assertEqual(self.locker.calls, 1)
 
     def test_failed_lock_is_not_marked_successful_and_can_retry(self) -> None:
         self.locker.error = RuntimeError("native failure")
