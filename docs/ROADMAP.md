@@ -6,7 +6,7 @@
 - mouse movement activity;
 - mouse click activity;
 - thread-safe centralized activity state;
-- listener lifecycle and deterministic tests.
+- deterministic listener tests.
 
 Status: implemented.
 
@@ -21,13 +21,13 @@ Status: implemented.
 
 Status: implemented.
 
-## M3 — Smart Lock Decision Foundation
+## M3 — Adaptive Lock Foundation
 
 - keep idle locking as the safe baseline;
-- separate lock decisions from Windows platform code;
 - accept optional local `user_present` signal;
 - accept optional local `trusted_device_nearby` signal;
-- preserve existing behavior when extra signals are unavailable.
+- use one small lock decision path;
+- preserve baseline behavior when optional signals fail or are unavailable.
 
 Status: implemented.
 
@@ -40,8 +40,8 @@ Status: implemented.
 - privacy rules for every signal source;
 - deterministic adapter tests.
 
-Status: planned. Adapters must remain optional and feed the existing decision
-engine instead of duplicating lock policy.
+Status: planned. Each adapter should only return simple local state to the
+existing lock controller.
 
 ## M5 — Runtime Experience
 
