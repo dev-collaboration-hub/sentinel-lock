@@ -32,13 +32,23 @@ class FakeListener:
         self.callbacks = callbacks
         self.started = False
         self.stopped = False
+        self.alive = False
         self.join_timeout: float | None = None
 
     def start(self) -> None:
         self.started = True
+        self.stopped = False
+        self.alive = True
 
     def stop(self) -> None:
         self.stopped = True
+        self.alive = False
 
     def join(self, timeout: float | None = None) -> None:
         self.join_timeout = timeout
+
+    def is_alive(self) -> bool:
+        return self.alive
+
+    def fail(self) -> None:
+        self.alive = False
