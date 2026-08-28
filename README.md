@@ -31,14 +31,19 @@ Implemented today:
 - native Windows workstation locking;
 - one lock request per idle episode;
 - recovery after new accepted keyboard or mouse activity;
+- automatic restart of unexpectedly stopped built-in keyboard/mouse listeners;
+- retry after transient listener restart failure;
 - Windows system tray with Status, Lock now, and Exit controls;
 - privacy-safe desktop notifications;
 - optional per-user Windows startup registration;
 - resume-like gap detection with safe idle re-baselining;
+- high-frequency keyboard/mouse regression stress tests;
+- bounded CI CPU/memory guards for input processing;
+- 1,000-episode long-run duplicate-lock stability simulation;
 - graceful background-service lifecycle;
 - rotating operational logs with no raw input data;
 - dry-run configuration checks;
-- deterministic unit tests for activity, filtering, timing, runtime controls,
+- deterministic unit tests for activity, filtering, timing, recovery, runtime controls,
   startup registration, resume handling, lock decisions, and failure handling.
 
 Raw key values, mouse buttons, pointer coordinates, and private user content are
@@ -118,11 +123,12 @@ sentinel-lock/
 │   ├── config.py            TOML configuration loader
 │   ├── idle.py              Idle tracking and lock decision logic
 │   ├── locker.py            Windows locking adapter
+│   ├── reliability.py       Input-monitor health and recovery supervisor
 │   ├── resume.py            Suspend/resume-like gap detection
 │   ├── runtime_ui.py        Tray controls, status, and notifications
 │   ├── startup.py           Per-user Windows startup registration
 │   └── logging_setup.py     Privacy-safe rotating logs
-└── tests/                   Cross-platform unit tests
+└── tests/                   Cross-platform unit and reliability tests
 ```
 
 ## Documentation
@@ -131,6 +137,7 @@ sentinel-lock/
 - [Activity Manager module](docs/modules/ACTIVITY_MANAGER.md)
 - [Mouse Monitor module / M4 rules](docs/modules/MOUSE_MONITOR.md)
 - [Runtime Experience / M5](docs/RUNTIME_EXPERIENCE.md)
+- [Reliability and Performance / M6](docs/M6_RELIABILITY.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Security model](docs/SECURITY.md)
 - [Development guide](docs/DEVELOPMENT.md)
@@ -144,7 +151,8 @@ python -m compileall -q src tests
 ```
 
 The test suite uses fake input listeners, clocks, lockers, and registry adapters,
-so it does not lock the workstation or require an active desktop session.
+so it does not lock the workstation or require an active desktop session. M6
+performance checks are regression ceilings for CI, not hardware benchmark claims.
 
 ## Contributing
 
