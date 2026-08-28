@@ -37,14 +37,15 @@ Status: implemented.
 
 ## M4 — Advanced Keyboard and Mouse Activity Detection
 
-- distinguish meaningful mouse activity from tiny accidental movement/noise;
-- preserve immediate keyboard and mouse-click activity updates;
-- keep activity classification deterministic and lightweight;
-- avoid storing raw keys, mouse buttons, or pointer coordinates;
-- add deterministic tests for movement filtering and activity refresh behavior;
-- document the exact threshold/rules used for meaningful mouse movement.
+- filter isolated mouse-movement jitter without retaining pointer coordinates;
+- confirm meaningful movement with two callbacks inside a 250 ms window;
+- rate-limit continuous movement activity refresh to once every 500 ms;
+- preserve immediate keyboard and pressed-click activity updates;
+- reset pending movement confirmation after a pressed click;
+- add deterministic tests for filtering, refresh behavior, and privacy boundaries;
+- document the exact movement rules and constants.
 
-Status: planned.
+Status: implemented.
 
 ## M5 — Runtime Experience
 
