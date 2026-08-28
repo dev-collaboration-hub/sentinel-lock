@@ -19,6 +19,11 @@ class WorkstationLocker(Protocol):
         """Request a workstation lock or raise on failure."""
 
 
+class ResumePoller(Protocol):
+    def poll(self) -> bool:
+        """Return whether a resume-like runtime gap was observed."""
+
+
 class ControllerState(str, Enum):
     ACTIVE = "active"
     LOCKED = "locked"
@@ -50,6 +55,9 @@ class IdleLockController:
         poll_interval_seconds: float,
         clock: Callable[[], float] = monotonic,
         logger: logging.Logger | None = None,
+        resume_detector: ResumePoller | None = None,
+        evaluation_observer: Callable[[IdleEvaluation], None] | None = None,
+        resume_observer: Callable[[], None] | None = None,
     ) -> None:
         if idle_timeout_seconds <= 0:
             raise ValueError("idle_timeout_seconds must be positive")
@@ -62,13 +70,32 @@ class IdleLockController:
         self._poll_interval_seconds = poll_interval_seconds
         self._clock = clock
         self._logger = logger or logging.getLogger(__name__)
+        self._resume_detector = resume_detector
+        self._evaluation_observer = evaluation_observer
+        self._resume_observer = resume_observer
         self._observed_sequence = activity_manager.snapshot().sequence
         self._armed = True
         self._state = ControllerState.ACTIVE
+        self._resume_baseline: float | None = None
+        self._force_lock = Event()
 
     @property
     def state(self) -> ControllerState:
         return self._state
+
+    def request_lock(self) -> None:
+        """Queue a user-requested lock for the controller thread."""
+
+        self._force_lock.set()
+
+    def handle_resume(self) -> None:
+        """Re-baseline idle time after a suspend/resume-like discontinuity."""
+
+        self._resume_baseline = self._clock()
+        self._armed = True
+        self._state = ControllerState.ACTIVE
+        self._force_lock.clear()
+        self._logger.info("Runtime resume detected; idle timer re-baselined")
 
     def evaluate_once(self) -> IdleEvaluation:
         """Evaluate one lock cycle and return its observable result."""
@@ -78,11 +105,19 @@ class IdleLockController:
             self._observed_sequence = snapshot.sequence
             self._armed = True
             self._state = ControllerState.ACTIVE
+            self._resume_baseline = None
 
-        idle_seconds = snapshot.idle_seconds(self._clock())
+        now = self._clock()
+        idle_seconds = snapshot.idle_seconds(now)
+        if self._resume_baseline is not None:
+            idle_seconds = min(idle_seconds, max(0.0, now - self._resume_baseline))
+
+        forced = self._force_lock.is_set()
+        if forced:
+            self._force_lock.clear()
 
         lock_requested = False
-        if self._armed and should_lock(idle_seconds, self._idle_timeout_seconds):
+        if self._armed and (forced or should_lock(idle_seconds, self._idle_timeout_seconds)):
             try:
                 self._locker.lock()
             except Exception:
@@ -91,10 +126,13 @@ class IdleLockController:
                 self._armed = False
                 self._state = ControllerState.LOCKED
                 lock_requested = True
-                self._logger.info(
-                    "Workstation lock requested after %.1f idle seconds",
-                    idle_seconds,
-                )
+                if forced:
+                    self._logger.info("Workstation lock requested by runtime control")
+                else:
+                    self._logger.info(
+                        "Workstation lock requested after %.1f idle seconds",
+                        idle_seconds,
+                    )
 
         return IdleEvaluation(
             idle_seconds=idle_seconds,
@@ -107,5 +145,32 @@ class IdleLockController:
         """Run lock evaluations until shutdown is requested."""
 
         while not stop_event.is_set():
-            self.evaluate_once()
+            if self._resume_detector is not None:
+                try:
+                    resumed = self._resume_detector.poll()
+                except Exception:
+                    self._logger.exception("Resume detector failed")
+                    resumed = False
+                if resumed:
+                    self.handle_resume()
+                    self._call_resume_observer()
+
+            evaluation = self.evaluate_once()
+            self._call_evaluation_observer(evaluation)
             stop_event.wait(self._poll_interval_seconds)
+
+    def _call_evaluation_observer(self, evaluation: IdleEvaluation) -> None:
+        if self._evaluation_observer is None:
+            return
+        try:
+            self._evaluation_observer(evaluation)
+        except Exception:
+            self._logger.exception("Runtime status observer failed")
+
+    def _call_resume_observer(self) -> None:
+        if self._resume_observer is None:
+            return
+        try:
+            self._resume_observer()
+        except Exception:
+            self._logger.exception("Runtime resume observer failed")
