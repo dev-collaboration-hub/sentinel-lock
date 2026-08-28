@@ -10,6 +10,21 @@ class MonitorTests(unittest.TestCase):
         self.clock = FakeClock()
         self.manager = ActivityManager(clock=self.clock)
 
+    def _mouse_monitor(self) -> tuple[MouseMonitor, FakeListener]:
+        listener = FakeListener()
+
+        def factory(**callbacks: object) -> FakeListener:
+            listener.callbacks = callbacks
+            return listener
+
+        monitor = MouseMonitor(
+            self.manager,
+            listener_factory=factory,
+            clock=self.clock,
+        )
+        monitor.start()
+        return monitor, listener
+
     def test_keyboard_press_updates_activity_without_retaining_key(self) -> None:
         listener = FakeListener()
 
@@ -31,23 +46,68 @@ class MonitorTests(unittest.TestCase):
         self.assertTrue(listener.stopped)
         self.assertEqual(listener.join_timeout, 2.0)
 
-    def test_mouse_move_and_pressed_click_are_distinct_events(self) -> None:
-        listener = FakeListener()
-
-        def factory(**callbacks: object) -> FakeListener:
-            listener.callbacks = callbacks
-            return listener
-
-        monitor = MouseMonitor(self.manager, listener_factory=factory)
-        monitor.start()
+    def test_isolated_mouse_move_is_filtered(self) -> None:
+        _monitor, listener = self._mouse_monitor()
         listener.callbacks["on_move"](50, 70)
-        listener.callbacks["on_click"](50, 70, "left", False)
-        listener.callbacks["on_click"](50, 70, "left", True)
+
+        self.assertEqual(self.manager.snapshot().sequence, 0)
+
+        self.clock.advance(0.30)
+        listener.callbacks["on_move"](51, 70)
+        self.assertEqual(self.manager.snapshot().sequence, 0)
+
+    def test_two_mouse_moves_inside_window_refresh_activity(self) -> None:
+        _monitor, listener = self._mouse_monitor()
+        listener.callbacks["on_move"](50, 70)
+        self.clock.advance(0.10)
+        listener.callbacks["on_move"](51, 71)
 
         snapshot = self.manager.snapshot()
-        self.assertEqual(snapshot.sequence, 2)
+        self.assertEqual(snapshot.sequence, 1)
+        self.assertEqual(snapshot.last_kind, ActivityKind.MOUSE_MOVE)
+        self.assertFalse(hasattr(snapshot, "coordinates"))
+
+    def test_continuous_mouse_movement_refresh_is_rate_limited(self) -> None:
+        _monitor, listener = self._mouse_monitor()
+        listener.callbacks["on_move"](10, 10)
+        self.clock.advance(0.10)
+        listener.callbacks["on_move"](11, 10)
+        self.assertEqual(self.manager.snapshot().sequence, 1)
+
+        for point in range(4):
+            self.clock.advance(0.10)
+            listener.callbacks["on_move"](12 + point, 10)
+        self.assertEqual(self.manager.snapshot().sequence, 1)
+
+        self.clock.advance(0.10)
+        listener.callbacks["on_move"](20, 10)
+        self.assertEqual(self.manager.snapshot().sequence, 2)
+
+    def test_pressed_click_is_immediate_and_release_is_ignored(self) -> None:
+        _monitor, listener = self._mouse_monitor()
+        listener.callbacks["on_click"](50, 70, "left", False)
+        self.assertEqual(self.manager.snapshot().sequence, 0)
+
+        listener.callbacks["on_click"](50, 70, "left", True)
+        snapshot = self.manager.snapshot()
+        self.assertEqual(snapshot.sequence, 1)
         self.assertEqual(snapshot.last_kind, ActivityKind.MOUSE_CLICK)
         self.assertFalse(hasattr(snapshot, "coordinates"))
+        self.assertFalse(hasattr(snapshot, "button"))
+
+    def test_click_resets_pending_mouse_movement_burst(self) -> None:
+        _monitor, listener = self._mouse_monitor()
+        listener.callbacks["on_move"](1, 1)
+        self.clock.advance(0.10)
+        listener.callbacks["on_click"](1, 1, "left", True)
+        self.clock.advance(0.10)
+        listener.callbacks["on_move"](2, 2)
+
+        self.assertEqual(self.manager.snapshot().sequence, 1)
+
+        self.clock.advance(0.10)
+        listener.callbacks["on_move"](3, 3)
+        self.assertEqual(self.manager.snapshot().sequence, 2)
 
     def test_start_is_idempotent(self) -> None:
         calls = 0
