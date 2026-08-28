@@ -11,7 +11,7 @@ locks the workstation after a configurable idle period.
 Sentinel Lock intentionally uses only:
 
 - keyboard key-press activity;
-- mouse movement activity;
+- meaningful mouse movement activity;
 - mouse click activity.
 
 Camera presence detection, face recognition, Bluetooth proximity, trusted-device
@@ -23,17 +23,22 @@ project scope.
 Implemented today:
 
 - thread-safe keyboard and mouse activity tracking;
+- deterministic filtering of isolated mouse-movement jitter;
+- meaningful movement confirmation using two callbacks within 250 ms;
+- continuous mouse-movement refresh limited to once every 500 ms;
+- immediate keyboard and pressed-click activity refresh;
 - configurable idle detection;
 - native Windows workstation locking;
 - one lock request per idle episode;
-- recovery after new keyboard or mouse activity;
+- recovery after new accepted keyboard or mouse activity;
 - graceful background-service lifecycle;
 - rotating operational logs with no raw input data;
 - dry-run configuration checks;
-- unit tests for activity, timing, lock decisions, and failure handling.
+- deterministic unit tests for activity, filtering, timing, lock decisions, and failure handling.
 
-Raw key values, pointer coordinates, and private user content are not retained or
-sent remotely.
+Raw key values, mouse buttons, pointer coordinates, and private user content are
+not retained or sent remotely. Mouse movement filtering uses callback timing only;
+it does not keep pointer positions.
 
 ## Requirements
 
@@ -105,6 +110,7 @@ sentinel-lock/
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Activity Manager module](docs/modules/ACTIVITY_MANAGER.md)
+- [Mouse Monitor module / M4 rules](docs/modules/MOUSE_MONITOR.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Security model](docs/SECURITY.md)
 - [Development guide](docs/DEVELOPMENT.md)
