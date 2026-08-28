@@ -11,6 +11,7 @@ from sentinel_lock.config import AppConfig
 from sentinel_lock.idle import IdleLockController, WorkstationLocker
 from sentinel_lock.locker import DryRunWorkstationLocker, WindowsWorkstationLocker
 from sentinel_lock.monitors import InputMonitor, KeyboardMonitor, MouseMonitor
+from sentinel_lock.reliability import MonitorSupervisor
 from sentinel_lock.resume import ResumeDetector
 
 
@@ -27,6 +28,7 @@ class SentinelLockApplication:
         locker: WorkstationLocker | None = None,
         runtime_experience: Any | None = None,
         resume_detector: Any | None = None,
+        monitor_supervisor: Any | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._config = config
@@ -50,6 +52,10 @@ class SentinelLockApplication:
                 gap_seconds=max(10.0, config.runtime.poll_interval_seconds * 4.0)
             )
 
+        if monitor_supervisor is None:
+            monitor_supervisor = MonitorSupervisor(self._monitors, logger=self._logger)
+        self._monitor_supervisor = monitor_supervisor
+
         evaluation_observer = (
             runtime_experience.observe if runtime_experience is not None else None
         )
@@ -64,6 +70,7 @@ class SentinelLockApplication:
             resume_detector=resume_detector,
             evaluation_observer=evaluation_observer,
             resume_observer=resume_observer,
+            maintenance_callback=monitor_supervisor.poll,
             logger=self._logger,
         )
 
