@@ -1,59 +1,76 @@
 # M7 Release Validation
 
-M7 separates deterministic repository evidence from checks that require an interactive Windows release candidate and a real code-signing identity.
+Sentinel Lock now uses a stdlib-only distribution model. There is no PyInstaller
+or pip-installed release toolchain.
 
-## CI gates
+## Automated CI gates
 
+- stdlib-only dependency gate on Windows and Ubuntu;
 - full unit-test suite on Windows and Ubuntu, Python 3.11 and 3.12;
-- Python source compilation;
-- Windows single-file executable build and `--version` smoke test;
-- SHA-256 checksum generation;
-- tagged releases require signing secrets;
-- tagged Windows executable must report a valid Authenticode signature before publication.
+- source compilation;
+- no-install source-launcher smoke test;
+- stdlib `zipapp` build on Windows;
+- `.pyz --version` smoke test;
+- SHA-256 checksum generation.
+
+## Distribution boundary
+
+The release artifact is `sentinel-lock.pyz`. It contains repository Python source
+and requires Python 3.11+ on the target Windows system.
+
+The project deliberately does not freeze or bundle a third-party Python runtime,
+so Authenticode executable signing is no longer a release gate for the `.pyz`
+artifact. SHA-256 checksum verification remains required.
 
 ## Multi-user validation
 
 Use two standard Windows user accounts. For each account:
 
-1. install or run Sentinel Lock;
+1. run Sentinel Lock from the same source or `.pyz` release;
 2. install startup registration;
 3. confirm the other account's startup entry is unchanged;
 4. remove startup registration;
 5. confirm only the current user's entry was removed.
 
-The implementation uses `HKEY_CURRENT_USER`, and deterministic tests validate independent per-user registry stores. Real account switching remains a release-candidate check.
+Deterministic tests already verify independent `HKEY_CURRENT_USER` stores. Real
+account switching remains an interactive release-candidate check.
+
+## Native input validation
+
+On a real interactive Windows desktop confirm:
+
+- keyboard presses refresh activity;
+- isolated mouse movement is filtered according to M4 rules;
+- sustained mouse movement refreshes activity;
+- pressed clicks refresh immediately;
+- raw keys, button identity, and coordinates are not logged;
+- stopping/restarting a hook recovers without duplicate activity.
+
+GitHub-hosted Windows CI validates the ctypes adapter import/event mapping, but it
+is not treated as proof of a user's physical keyboard/mouse desktop session.
 
 ## Accessibility validation
 
-On an interactive Windows desktop:
+- tray status is text-based;
+- Lock now and Exit have explicit labels;
+- `--no-tray` supports foreground/headless operation;
+- notifications can be disabled with `--no-notifications`.
 
-- tray status is readable as text, not color-only state;
-- `Lock now` and `Exit` have explicit text labels;
-- keyboard navigation/standard tray interaction remains usable with Windows accessibility settings;
-- `--no-tray` allows headless/foreground operation when tray interaction is unsuitable;
-- notifications are optional with `--no-notifications`.
+## Power / suspend-resume validation
 
-## Power validation
+Repository tests enforce bounded CPU/memory regression ceilings and prove the
+controller waits between polls rather than busy-spinning. A real Windows release
+candidate still needs an extended active/idle/sleep/resume smoke test.
 
-Repository tests already enforce bounded CPU/memory under high event rates and the controller waits between polls instead of busy-spinning. For a release candidate, run Sentinel Lock for an extended idle/active session and compare Windows power/CPU observations against the same machine without Sentinel Lock. Record average CPU, memory, sleep/resume behavior, and whether the process prevents normal sleep.
+## Stable release gate
 
-## Production signing
+Do not call a release fully interactive-Windows-verified until these are recorded:
 
-A production release requires a trusted Windows code-signing certificate supplied to GitHub Actions as:
-
-- `WINDOWS_SIGNING_CERT_BASE64`
-- `WINDOWS_SIGNING_CERT_PASSWORD`
-
-The tagged-release workflow fails closed when either secret is missing. Do not substitute an ephemeral/self-signed CI certificate as production evidence.
-
-## Stable v1.0 gate
-
-Do not call v1.0 release-verified until all of the following are recorded:
-
-- 4/4 normal CI matrix green on release HEAD;
-- packaged EXE smoke test green;
-- trusted Authenticode signature valid;
-- two-user startup validation complete;
-- interactive tray/accessibility check complete;
-- real Windows power/suspend/resume check complete;
-- install/upgrade/remove smoke test complete.
+- 4/4 test matrix green;
+- stdlib dependency gate green;
+- zipapp build/smoke/checksum green;
+- two-user startup validation;
+- real keyboard/mouse hook validation;
+- tray/accessibility check;
+- power/suspend/resume check;
+- source or `.pyz` upgrade/remove smoke test.
