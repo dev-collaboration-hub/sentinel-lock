@@ -2,14 +2,17 @@
 
 ## Design goals
 
-Sentinel Lock stays small and local-first:
+Sentinel Lock stays small, local-first, and keyboard/mouse-only:
 
 1. **Fail safely:** failed lock requests are reported and retried.
 2. **Remain lightweight:** input callbacks only update small in-memory state.
-3. **Preserve privacy:** raw input content and camera data are not retained by the core.
-4. **Stay testable:** clocks, monitors, optional signal readers, and the locker are replaceable.
+3. **Preserve privacy:** raw keyboard and mouse content is never retained.
+4. **Stay testable:** clocks, monitors, and the locker are replaceable.
 5. **Keep platform code separate:** lock decisions never call Windows APIs directly.
-6. **Add new signals through small adapters:** optional sensors provide simple state only.
+6. **Keep scope narrow:** only keyboard presses, mouse movement, and mouse clicks can refresh activity.
+
+Camera, face recognition, Bluetooth proximity, trusted-device presence, microphone
+sensing, and other external presence signals are not part of Sentinel Lock.
 
 ## Runtime flow
 
@@ -18,19 +21,16 @@ flowchart TD
     K["Keyboard listener"] --> A["Activity manager"]
     M["Mouse listener"] --> A
     A --> C["Idle lock controller"]
-    P["Optional local signals"] --> C
     C --> L["Windows locker"]
     C --> O["Operational log"]
 ```
 
 Keyboard and mouse listeners update `ActivityManager`. `IdleLockController`
-calculates idle time, reads optional local presence signals, applies a small
-lock rule, and calls the Windows locker when locking is required.
+calculates elapsed inactivity and requests a workstation lock when the configured
+idle threshold is reached.
 
-Without an optional signal reader, behavior is ordinary idle-time locking.
-`user_present=True` or `trusted_device_nearby=True` can keep an attended
-workstation unlocked after the idle threshold. Unknown or failed optional
-signals fall back to the idle-lock baseline.
+New keyboard or mouse activity changes the activity sequence and rearms the
+controller for a future idle episode.
 
 ## Components
 
@@ -45,18 +45,21 @@ button, or pointer coordinates.
 `KeyboardMonitor` and `MouseMonitor` translate `pynput` callbacks into activity
 updates and discard raw event content.
 
+M4 may add deterministic filtering so tiny accidental pointer jitter does not
+count as meaningful activity. That filtering must remain inside the keyboard/
+mouse activity boundary and must not create user profiling or input history.
+
 ### Lock controller
 
-`sentinel_lock.idle.IdleLockController` contains the small runtime policy:
+`sentinel_lock.idle.IdleLockController` contains the runtime policy:
 
 - do nothing before the idle timeout;
-- keep the workstation unlocked when a connected local signal confirms presence;
-- otherwise request one lock per idle episode;
+- request one lock when the timeout is reached;
 - rearm after new keyboard or mouse activity;
-- keep running after sensor or native lock failures.
+- keep running after a native lock failure.
 
-The decision rule is a simple function in `idle.py`; there is no separate rule
-engine or framework.
+The decision rule is deliberately deterministic. There is no presence sensor,
+trusted-device bypass, external signal reader, AI model, or separate rule engine.
 
 ### Windows locker
 
@@ -66,25 +69,22 @@ state.
 
 ### Configuration and logging
 
-TOML is only used to configure runtime values such as idle timeout, polling, and
-logging. It is not part of the lock policy.
+TOML configures runtime values such as idle timeout, polling, and logging.
+Configuration does not introduce additional activity sources.
 
 Logs contain lifecycle, policy, and error information only. Raw keystrokes,
-pointer coordinates, camera frames, face images, and private user content must
-not be logged by the core application.
+mouse buttons, pointer coordinates, and private user content must not be logged.
 
-## Adding future signals
+## Scope boundary
 
-Future computer-vision, face-recognition, Bluetooth, or trusted-device code
-should expose only simple local state such as `user_present` or
-`trusted_device_nearby`.
+The supported activity flow is fixed:
 
-A signal adapter must not call the Windows locker directly. The flow remains:
+1. keyboard presses or mouse activity arrive through input monitors;
+2. monitors convert them to minimal activity categories;
+3. `ActivityManager` updates the latest activity state;
+4. `IdleLockController` evaluates inactivity;
+5. `WindowsWorkstationLocker` performs the platform lock action.
 
-1. collect local signal;
-2. return minimal state;
-3. let `IdleLockController` make the lock decision;
-4. let the Windows locker perform the platform action.
-
-This keeps the original adaptive-lock direction without making the codebase
-complex.
+New features must preserve this boundary. Features that infer presence from
+camera, face, Bluetooth, nearby devices, audio, location, or network state belong
+outside this repository.
