@@ -1,5 +1,9 @@
 # Roadmap
 
+Sentinel Lock is intentionally limited to keyboard and mouse activity. Camera,
+face recognition, Bluetooth proximity, trusted-device presence, microphone
+sensing, and other external presence signals are out of scope.
+
 ## M1 — Activity Monitoring
 
 - keyboard press activity;
@@ -14,34 +18,33 @@ Status: implemented.
 
 - configurable monotonic idle timer;
 - one lock request per idle episode;
-- recovery after new activity;
+- recovery after new keyboard or mouse activity;
 - native `LockWorkStation` adapter;
 - dry-run safety mode;
 - deterministic threshold and failure tests.
 
 Status: implemented.
 
-## M3 — Adaptive Lock Foundation
+## M3 — Keyboard/Mouse Lock Core
 
-- keep idle locking as the safe baseline;
-- accept optional local `user_present` signal;
-- accept optional local `trusted_device_nearby` signal;
-- use one small lock decision path;
-- preserve baseline behavior when optional signals fail or are unavailable.
+- keep keyboard and mouse activity as the only activity sources;
+- use one small deterministic idle-lock decision path;
+- lock when the configured inactivity threshold is reached;
+- rearm after new keyboard or mouse activity;
+- preserve privacy by discarding raw input content.
 
 Status: implemented.
 
-## M4 — Local Presence Signals
+## M4 — Advanced Keyboard and Mouse Activity Detection
 
-- computer-vision presence adapter;
-- optional local face-recognition adapter;
-- Bluetooth phone proximity adapter;
-- trusted-device adapter;
-- privacy rules for every signal source;
-- deterministic adapter tests.
+- distinguish meaningful mouse activity from tiny accidental movement/noise;
+- preserve immediate keyboard and mouse-click activity updates;
+- keep activity classification deterministic and lightweight;
+- avoid storing raw keys, mouse buttons, or pointer coordinates;
+- add deterministic tests for movement filtering and activity refresh behavior;
+- document the exact threshold/rules used for meaningful mouse movement.
 
-Status: planned. Each adapter should only return simple local state to the
-existing lock controller.
+Status: planned.
 
 ## M5 — Runtime Experience
 
@@ -49,18 +52,18 @@ existing lock controller.
 - desktop notifications;
 - optional Windows startup registration;
 - suspend and resume handling;
-- clear signal and lock status without exposing private input data.
+- clear idle and lock status without exposing private input data.
 
 Status: planned.
 
 ## M6 — Reliability and Performance
 
-- high-frequency input stress testing;
+- high-frequency keyboard and mouse stress testing;
 - listener recovery after transient input-hook failure;
 - bounded CPU and memory benchmarks;
 - long-running stability tests;
-- multi-signal failure handling;
-- protection against duplicate lock requests.
+- protection against duplicate lock requests;
+- validation that movement filtering remains lightweight.
 
 Status: planned.
 
@@ -71,7 +74,6 @@ Status: planned.
 - accessibility and power-consumption testing;
 - threat-model review;
 - installation, upgrade, and removal documentation;
-- stable v1.0 release;
-- evaluate cross-platform adapters without complicating the Windows core.
+- stable v1.0 release.
 
 Status: planned.
