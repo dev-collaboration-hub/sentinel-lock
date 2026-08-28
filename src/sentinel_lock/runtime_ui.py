@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from threading import Event, Lock
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from sentinel_lock.idle import ControllerState, IdleEvaluation
 
@@ -53,18 +53,20 @@ class RuntimeStatus:
 
 
 class TrayRuntimeExperience:
-    """Small pystray UI with Status, Lock now, and Exit controls."""
+    """Native Win32 tray UI with Status, Lock now, and Exit controls."""
 
     def __init__(
         self,
         *,
         notifications_enabled: bool = True,
         logger: logging.Logger | None = None,
+        backend_factory: Callable[..., Any] | None = None,
     ) -> None:
         self._notifications_enabled = notifications_enabled
         self._logger = logger or logging.getLogger(__name__)
         self._status = RuntimeStatus()
-        self._icon: Any | None = None
+        self._backend_factory = backend_factory
+        self._backend: Any | None = None
         self._controller: LockRequester | None = None
         self._stop_event: Event | None = None
 
@@ -73,95 +75,87 @@ class TrayRuntimeExperience:
         return self._status
 
     def start(self, controller: LockRequester, stop_event: Event) -> bool:
-        """Start the tray UI; return False if the desktop backend is unavailable."""
-
-        try:
-            import pystray
-            from PIL import Image, ImageDraw
-        except ImportError:
-            self._logger.warning("Tray UI dependencies are unavailable")
-            return False
+        """Start the stdlib-only native tray backend."""
 
         self._controller = controller
         self._stop_event = stop_event
-        image = Image.new("RGB", (64, 64), "white")
-        draw = ImageDraw.Draw(image)
-        draw.rectangle((12, 26, 52, 55), outline="black", width=5)
-        draw.arc((20, 7, 44, 38), 180, 360, fill="black", width=5)
-
-        menu = pystray.Menu(
-            pystray.MenuItem(self._status_text, self._status_noop, enabled=False),
-            pystray.MenuItem("Lock now", self._lock_now),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Exit", self._exit),
-        )
-        self._icon = pystray.Icon("sentinel-lock", image, "Sentinel Lock", menu)
         try:
-            self._icon.run_detached()
+            factory = self._backend_factory or self._default_backend_factory()
+            backend = factory(
+                status_provider=self._status_text,
+                lock_now=self._lock_now,
+                exit_app=self._exit,
+                logger=self._logger,
+            )
+            backend.start()
         except Exception:
-            self._logger.exception("System tray failed to start")
-            self._icon = None
+            self._logger.exception("Native system tray failed to start")
             return False
-        self._logger.info("System tray started")
+        self._backend = backend
+        self._logger.info("Native system tray started")
         return True
 
     def observe(self, evaluation: IdleEvaluation) -> None:
         self._status.observe(evaluation)
-        icon = self._icon
-        if icon is not None:
-            try:
-                icon.title = f"Sentinel Lock - {self._status_text(None)}"
-                icon.update_menu()
-                if evaluation.lock_requested:
-                    self._notify("Workstation lock requested", "Sentinel Lock")
-            except Exception:
-                self._logger.exception("System tray status update failed")
+        backend = self._backend
+        if backend is None:
+            return
+        try:
+            backend.update_tip(f"Sentinel Lock - {self._status_text()}")
+            if evaluation.lock_requested:
+                self._notify("Sentinel Lock", "Workstation lock requested")
+        except Exception:
+            self._logger.exception("System tray status update failed")
 
     def note_resume(self) -> None:
         self._status.note_resume()
-        icon = self._icon
-        if icon is not None:
-            try:
-                icon.title = "Sentinel Lock - Active after resume"
-                icon.update_menu()
-                self._notify("Idle timer reset after resume", "Sentinel Lock")
-            except Exception:
-                self._logger.exception("System tray resume update failed")
+        backend = self._backend
+        if backend is None:
+            return
+        try:
+            backend.update_tip("Sentinel Lock - Active after resume")
+            self._notify("Sentinel Lock", "Idle timer reset after resume")
+        except Exception:
+            self._logger.exception("System tray resume update failed")
 
     def stop(self) -> None:
-        icon = self._icon
-        self._icon = None
-        if icon is not None:
-            try:
-                icon.stop()
-            except Exception:
-                self._logger.exception("System tray failed to stop")
+        backend = self._backend
+        self._backend = None
+        if backend is None:
+            return
+        try:
+            backend.stop()
+            backend.join(2.0)
+        except Exception:
+            self._logger.exception("System tray failed to stop")
 
-    def _status_text(self, _item: Any) -> str:
+    def _status_text(self) -> str:
         snapshot = self._status.snapshot()
         if snapshot.state is ControllerState.LOCKED:
             return "Status: lock requested"
         return f"Status: active - idle {snapshot.idle_seconds:.0f}s"
 
-    @staticmethod
-    def _status_noop(_icon: Any, _item: Any) -> None:
-        return None
-
-    def _lock_now(self, _icon: Any, _item: Any) -> None:
+    def _lock_now(self) -> None:
         controller = self._controller
         if controller is not None:
             controller.request_lock()
 
-    def _exit(self, icon: Any, _item: Any) -> None:
+    def _exit(self) -> None:
         stop_event = self._stop_event
         if stop_event is not None:
             stop_event.set()
-        icon.stop()
 
-    def _notify(self, message: str, title: str) -> None:
-        if not self._notifications_enabled or self._icon is None:
+    def _notify(self, title: str, message: str) -> None:
+        backend = self._backend
+        if not self._notifications_enabled or backend is None:
             return
         try:
-            self._icon.notify(message, title)
-        except (AttributeError, NotImplementedError):
-            self._logger.debug("Desktop notifications are unavailable")
+            backend.notify(title, message)
+        except Exception:
+            self._logger.debug("Desktop notification is unavailable", exc_info=True)
+
+    @staticmethod
+    def _default_backend_factory() -> Callable[..., Any]:
+        from sentinel_lock.win32_tray import Win32TrayBackend
+
+        return Win32TrayBackend
