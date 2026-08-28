@@ -1,3 +1,4 @@
+from threading import Event
 import time
 import tracemalloc
 import unittest
@@ -36,6 +37,34 @@ class MonitorRecoveryTests(unittest.TestCase):
         self.assertEqual(len(listeners), 2)
         self.assertTrue(listeners[1].is_alive())
 
+    def test_mouse_restart_resets_pending_movement_confirmation(self) -> None:
+        clock = FakeClock()
+        manager = ActivityManager(clock=clock)
+        listeners: list[FakeListener] = []
+
+        def factory(**callbacks: object) -> FakeListener:
+            listener = FakeListener(**callbacks)
+            listeners.append(listener)
+            return listener
+
+        monitor = MouseMonitor(
+            manager,
+            listener_factory=factory,
+            clock=clock,
+        )
+        monitor.start()
+        listeners[0].callbacks["on_move"](1, 1)
+        listeners[0].fail()
+        MonitorSupervisor([monitor]).poll()
+
+        clock.advance(0.10)
+        listeners[1].callbacks["on_move"](2, 2)
+        self.assertEqual(manager.snapshot().sequence, 0)
+
+        clock.advance(0.10)
+        listeners[1].callbacks["on_move"](3, 3)
+        self.assertEqual(manager.snapshot().sequence, 1)
+
     def test_supervisor_retries_after_transient_restart_failure(self) -> None:
         manager = ActivityManager()
         calls = 0
@@ -62,6 +91,34 @@ class MonitorRecoveryTests(unittest.TestCase):
         self.assertEqual(failed.failures, 1)
         self.assertEqual(recovered.restarted, 1)
         self.assertTrue(monitor.is_alive())
+
+    def test_controller_maintenance_failure_is_isolated(self) -> None:
+        clock = FakeClock()
+        manager = ActivityManager(clock=clock)
+        locker = RecordingLocker()
+        stop_event = Event()
+        calls = 0
+
+        def broken_maintenance() -> None:
+            nonlocal calls
+            calls += 1
+            stop_event.set()
+            raise RuntimeError("maintenance failure")
+
+        controller = IdleLockController(
+            manager,
+            locker,
+            idle_timeout_seconds=10,
+            poll_interval_seconds=1,
+            clock=clock,
+            maintenance_callback=broken_maintenance,
+        )
+
+        with self.assertLogs("sentinel_lock.idle", level="ERROR"):
+            controller.run(stop_event)
+
+        self.assertEqual(calls, 1)
+        self.assertEqual(locker.calls, 0)
 
 
 class PerformanceGuardTests(unittest.TestCase):
