@@ -20,3 +20,9 @@ class InputMonitor(Protocol):
 
     def join(self, timeout: float | None = None) -> None:
         """Wait for listener shutdown."""
+
+    def is_alive(self) -> bool:
+        """Return whether the underlying input listener is healthy."""
+
+    def restart(self) -> None:
+        """Replace a failed listener with a fresh listener."""
