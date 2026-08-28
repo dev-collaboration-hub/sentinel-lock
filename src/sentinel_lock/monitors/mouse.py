@@ -106,6 +106,41 @@ class MouseMonitor:
         if listener is not None:
             listener.join(timeout)
 
+    def is_alive(self) -> bool:
+        """Return listener health without retaining pointer information."""
+
+        with self._lifecycle_lock:
+            listener = self._listener
+        if listener is None:
+            return False
+        probe = getattr(listener, "is_alive", None)
+        if not callable(probe):
+            return True
+        try:
+            return bool(probe())
+        except Exception:
+            self._logger.exception("Mouse listener health probe failed")
+            return False
+
+    def restart(self) -> None:
+        """Replace the current listener and reset pending movement state."""
+
+        with self._lifecycle_lock:
+            listener = self._listener
+            self._listener = None
+        if listener is not None:
+            try:
+                listener.stop()
+            except Exception:
+                self._logger.debug("Mouse listener stop during restart failed", exc_info=True)
+            try:
+                listener.join(1.0)
+            except Exception:
+                self._logger.debug("Mouse listener join during restart failed", exc_info=True)
+        self._movement_filter.reset()
+        self.start()
+        self._logger.warning("Mouse activity monitor restarted")
+
     def _on_move(self, _x: int, _y: int) -> None:
         try:
             if self._movement_filter.accepts_move():
