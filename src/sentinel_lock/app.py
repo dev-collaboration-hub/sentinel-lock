@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import logging
 from threading import Event
-from typing import Callable, Iterable
+from typing import Iterable
 
 from sentinel_lock.activity import ActivityManager
 from sentinel_lock.config import AppConfig
-from sentinel_lock.idle import IdleLockController, PresenceSignals, WorkstationLocker
+from sentinel_lock.idle import IdleLockController, WorkstationLocker
 from sentinel_lock.locker import DryRunWorkstationLocker, WindowsWorkstationLocker
 from sentinel_lock.monitors import InputMonitor, KeyboardMonitor, MouseMonitor
 
 
 class SentinelLockApplication:
-    """Own monitor, controller, and shutdown lifecycles."""
+    """Own keyboard/mouse monitors, lock controller, and shutdown lifecycles."""
 
     def __init__(
         self,
@@ -24,7 +24,6 @@ class SentinelLockApplication:
         activity_manager: ActivityManager | None = None,
         monitors: Iterable[InputMonitor] | None = None,
         locker: WorkstationLocker | None = None,
-        signal_reader: Callable[[], PresenceSignals] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._config = config
@@ -47,7 +46,6 @@ class SentinelLockApplication:
             locker,
             idle_timeout_seconds=config.security.idle_timeout_seconds,
             poll_interval_seconds=config.runtime.poll_interval_seconds,
-            signal_reader=signal_reader,
             logger=self._logger,
         )
 
