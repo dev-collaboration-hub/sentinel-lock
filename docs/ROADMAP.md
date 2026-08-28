@@ -74,11 +74,15 @@ Status: implemented.
 
 ## M7 — Release Hardening
 
-- signed Windows packaging;
-- multi-user validation;
-- accessibility and power-consumption testing;
-- threat-model review;
+- Windows single-file packaging and smoke test in normal CI;
+- tagged release workflow with fail-closed production Authenticode signing gate;
+- SHA-256 release checksum generation;
+- deterministic per-user startup isolation tests;
+- deterministic no-busy-spin power guard plus M6 CPU/memory ceilings;
+- threat-model review and residual-risk documentation;
 - installation, upgrade, and removal documentation;
-- stable v1.0 release.
+- explicit interactive Windows validation checklist for multi-user, accessibility,
+  power/suspend/resume, and production signing;
+- stable v1.0 publication only after all external release-candidate gates pass.
 
-Status: planned.
+Status: repository hardening implemented; production release verification pending trusted code-signing credentials and interactive Windows release-candidate validation.
