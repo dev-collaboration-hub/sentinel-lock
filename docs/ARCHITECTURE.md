@@ -9,7 +9,7 @@ Sentinel Lock stays small, local-first, and keyboard/mouse-only:
 3. **Preserve privacy:** raw keyboard and mouse content is never retained.
 4. **Stay testable:** clocks, monitors, and the locker are replaceable.
 5. **Keep platform code separate:** lock decisions never call Windows APIs directly.
-6. **Keep scope narrow:** only keyboard presses, mouse movement, and mouse clicks can refresh activity.
+6. **Keep scope narrow:** only keyboard presses, meaningful mouse movement, and mouse clicks can refresh activity.
 
 Camera, face recognition, Bluetooth proximity, trusted-device presence, microphone
 sensing, and other external presence signals are not part of Sentinel Lock.
@@ -19,35 +19,49 @@ sensing, and other external presence signals are not part of Sentinel Lock.
 ```mermaid
 flowchart TD
     K["Keyboard listener"] --> A["Activity manager"]
-    M["Mouse listener"] --> A
+    M["Mouse listener"] --> F["Movement timing filter"]
+    F --> A
+    M --> A
     A --> C["Idle lock controller"]
     C --> L["Windows locker"]
     C --> O["Operational log"]
 ```
 
-Keyboard and mouse listeners update `ActivityManager`. `IdleLockController`
-calculates elapsed inactivity and requests a workstation lock when the configured
-idle threshold is reached.
+Keyboard presses and pressed mouse clicks update `ActivityManager` immediately.
+Mouse movement first passes through a deterministic timing filter. The filter
+confirms movement when two callbacks arrive within 250 ms and then limits
+continuous movement refreshes to once every 500 ms.
 
-New keyboard or mouse activity changes the activity sequence and rearms the
-controller for a future idle episode.
+`IdleLockController` calculates elapsed inactivity and requests a workstation
+lock when the configured idle threshold is reached. New accepted activity
+changes the activity sequence and rearms the controller for a future idle
+episode.
 
 ## Components
 
 ### Activity manager
 
-`sentinel_lock.activity.ActivityManager` stores the latest keyboard or mouse
-activity timestamp and sequence number. It never stores the key value, mouse
-button, or pointer coordinates.
+`sentinel_lock.activity.ActivityManager` stores the latest accepted keyboard or
+mouse activity timestamp and sequence number. It never stores the key value,
+mouse button, or pointer coordinates.
 
 ### Input monitors
 
-`KeyboardMonitor` and `MouseMonitor` translate `pynput` callbacks into activity
-updates and discard raw event content.
+`KeyboardMonitor` converts every key press into `KEYBOARD` activity without
+retaining the pressed key.
 
-M4 may add deterministic filtering so tiny accidental pointer jitter does not
-count as meaningful activity. That filtering must remain inside the keyboard/
-mouse activity boundary and must not create user profiling or input history.
+`MouseMonitor` handles movement and clicks through one `pynput` listener:
+
+- one isolated movement callback starts a candidate burst but does not refresh activity;
+- a second callback within 250 ms confirms meaningful movement;
+- confirmed continuous movement can refresh activity at most once every 500 ms;
+- a gap longer than 250 ms starts a new candidate burst;
+- pressed clicks refresh activity immediately and reset pending movement state;
+- release callbacks are ignored.
+
+The movement filter stores only monotonic timing state. Pointer `x` and `y`
+values are ignored and never retained. This avoids using spatial pointer history
+just to reject one-off jitter.
 
 ### Lock controller
 
@@ -55,7 +69,7 @@ mouse activity boundary and must not create user profiling or input history.
 
 - do nothing before the idle timeout;
 - request one lock when the timeout is reached;
-- rearm after new keyboard or mouse activity;
+- rearm after new accepted keyboard or mouse activity;
 - keep running after a native lock failure.
 
 The decision rule is deliberately deterministic. There is no presence sensor,
@@ -80,10 +94,11 @@ mouse buttons, pointer coordinates, and private user content must not be logged.
 The supported activity flow is fixed:
 
 1. keyboard presses or mouse activity arrive through input monitors;
-2. monitors convert them to minimal activity categories;
-3. `ActivityManager` updates the latest activity state;
-4. `IdleLockController` evaluates inactivity;
-5. `WindowsWorkstationLocker` performs the platform lock action.
+2. the mouse monitor filters isolated movement jitter using timing only;
+3. monitors convert accepted input to minimal activity categories;
+4. `ActivityManager` updates the latest activity state;
+5. `IdleLockController` evaluates inactivity;
+6. `WindowsWorkstationLocker` performs the platform lock action.
 
 New features must preserve this boundary. Features that infer presence from
 camera, face, Bluetooth, nearby devices, audio, location, or network state belong
