@@ -61,14 +61,16 @@ Status: implemented.
 
 ## M6 — Reliability and Performance
 
-- high-frequency keyboard and mouse stress testing;
-- listener recovery after transient input-hook failure;
-- bounded CPU and memory benchmarks;
-- long-running stability tests;
-- protection against duplicate lock requests;
-- validation that movement filtering remains lightweight.
+- high-frequency keyboard and mouse stress tests with deterministic CI guards;
+- built-in listener health probing and restart after transient input-hook failure;
+- retry on a later poll after transient restart failure;
+- bounded process-CPU and Python traced-memory regression ceilings;
+- 1,000-episode long-run stability simulation;
+- protection against duplicate automatic and runtime-requested locks;
+- validation that M4 movement filtering remains bounded under high event rates;
+- dedicated reliability and performance evidence documentation.
 
-Status: planned.
+Status: implemented.
 
 ## M7 — Release Hardening
 
