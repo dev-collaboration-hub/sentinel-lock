@@ -100,6 +100,6 @@ class KeyboardMonitor:
 
     @staticmethod
     def _default_factory() -> ListenerFactory:
-        from pynput import keyboard
+        from sentinel_lock.win32_input import Win32KeyboardListener
 
-        return keyboard.Listener
+        return Win32KeyboardListener
