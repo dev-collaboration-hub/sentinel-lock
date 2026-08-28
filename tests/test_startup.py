@@ -58,16 +58,16 @@ class FakeRegistry:
 
 
 class StartupTests(unittest.TestCase):
-    def test_command_is_quoted_and_preserves_runtime_options(self) -> None:
+    def test_command_uses_source_launcher_and_preserves_runtime_options(self) -> None:
         command = build_startup_command(["--config", "C:\\A Folder\\config.toml", "--no-tray"])
-        self.assertIn("-m sentinel_lock", command)
+        self.assertIn("run_sentinel_lock.py", command)
         self.assertIn('"C:\\A Folder\\config.toml"', command)
         self.assertIn("--no-tray", command)
 
     def test_install_read_and_remove_round_trip(self) -> None:
         registry = FakeRegistry()
-        installed = install_startup("sentinel-lock --no-tray", registry=registry)
-        self.assertEqual(installed, "sentinel-lock --no-tray")
+        installed = install_startup("python sentinel-lock.pyz --no-tray", registry=registry)
+        self.assertEqual(installed, "python sentinel-lock.pyz --no-tray")
         self.assertEqual(startup_command(registry=registry), installed)
         self.assertIn(VALUE_NAME, registry.values)
         self.assertTrue(remove_startup(registry=registry))
