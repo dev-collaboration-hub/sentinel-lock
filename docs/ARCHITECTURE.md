@@ -7,7 +7,7 @@ Sentinel Lock stays small, local-first, and keyboard/mouse-only:
 1. **Fail safely:** failed lock requests are reported and retried.
 2. **Remain lightweight:** input callbacks only update small in-memory state.
 3. **Preserve privacy:** raw keyboard and mouse content is never retained.
-4. **Stay testable:** clocks, monitors, runtime UI, registry access, and the locker are replaceable.
+4. **Stay testable:** clocks, monitors, runtime UI, registry access, recovery, and the locker are replaceable.
 5. **Keep platform code separate:** lock decisions never call Windows APIs directly.
 6. **Keep scope narrow:** only keyboard presses, meaningful mouse movement, and mouse clicks can refresh activity.
 
@@ -22,7 +22,12 @@ flowchart TD
     M["Mouse listener"] --> F["Movement timing filter"]
     F --> A
     M --> A
+    K --> H["Monitor supervisor"]
+    M --> H
+    H -->|restart unhealthy listener| K
+    H -->|restart unhealthy listener| M
     A --> C["Idle lock controller"]
+    C --> H
     R["Resume gap detector"] --> C
     T["Tray controls"] -->|lock request event| C
     C --> S["Privacy-safe runtime status"]
@@ -41,10 +46,15 @@ lock when the configured idle threshold is reached. New accepted activity
 changes the activity sequence and rearms the controller for a future idle
 episode.
 
-M5 adds a runtime-experience boundary around that same controller. Tray actions
-never call Windows APIs directly. **Lock now** sets a thread-safe request event
-that the controller consumes on its own loop. Runtime status contains only
-controller state and effective idle duration.
+The runtime-experience boundary stays outside the lock policy. Tray actions never
+call Windows APIs directly. **Lock now** sets a thread-safe request event that the
+controller consumes on its own loop. Runtime status contains only controller
+state and effective idle duration.
+
+M6 adds one lightweight maintenance callback to the same controller poll loop.
+The callback invokes `MonitorSupervisor`, which checks only listener health and
+may restart a failed built-in input monitor. It does not create activity events
+or change lock thresholds.
 
 ## Components
 
@@ -68,8 +78,25 @@ retaining the pressed key.
 - pressed clicks refresh activity immediately and reset pending movement state;
 - release callbacks are ignored.
 
+Both built-in monitors expose a small lifecycle health contract:
+
+- `is_alive()` probes whether the underlying listener is still running;
+- `restart()` replaces a failed listener;
+- mouse restart clears pending movement-filter timing state before starting the
+  replacement listener.
+
 The movement filter stores only monotonic timing state. Pointer `x` and `y`
 values are ignored and never retained.
+
+### Monitor supervisor
+
+`sentinel_lock.reliability.MonitorSupervisor` polls recoverable monitors during
+the controller's normal maintenance cycle. Healthy listeners are untouched.
+Stopped listeners are restarted. A transient restart failure is logged and the
+next poll can retry.
+
+A custom monitor that does not expose both `is_alive()` and `restart()` is not
+managed by the supervisor. Recovery errors are isolated from idle evaluation.
 
 ### Lock controller
 
@@ -80,7 +107,8 @@ values are ignored and never retained.
 - accept a thread-safe explicit lock request from the runtime UI;
 - rearm after new accepted keyboard or mouse activity;
 - re-baseline effective idle time after a resume-like discontinuity;
-- keep running after native-lock, resume-detector, or observer failures.
+- call lightweight runtime maintenance once per normal poll;
+- keep running after native-lock, resume-detector, maintenance, or observer failures.
 
 The decision rule remains deterministic. There is no presence sensor,
 trusted-device bypass, external signal reader, AI model, or separate rule engine.
@@ -121,13 +149,27 @@ options and does not require an administrator-level machine-wide key.
 API. `DryRunWorkstationLocker` uses the same interface without changing session
 state.
 
+### Reliability and performance guards
+
+M6 adds CI regression guards rather than claiming fixed end-user benchmark
+numbers. Tests cover:
+
+- 10,000 keyboard callbacks;
+- 10,000 high-rate mouse movement callbacks;
+- process CPU ceiling below 10 seconds for each stress test;
+- Python traced peak-memory ceiling below 32 MiB for each stress test;
+- 1,000 complete idle episodes with exact one-lock-per-episode behavior;
+- transient listener restart failure followed by successful recovery;
+- repeated runtime lock requests while already locked.
+
 ### Configuration and logging
 
 TOML configures runtime values such as idle timeout, polling, and logging.
 Configuration does not introduce additional activity sources.
 
-Logs contain lifecycle, policy, and error information only. Raw keystrokes,
-mouse buttons, pointer coordinates, and private user content must not be logged.
+Logs contain lifecycle, policy, recovery, and error information only. Raw
+keystrokes, mouse buttons, pointer coordinates, and private user content must not
+be logged.
 
 ## Scope boundary
 
@@ -137,11 +179,12 @@ The supported activity flow is fixed:
 2. the mouse monitor filters isolated movement jitter using timing only;
 3. monitors convert accepted input to minimal activity categories;
 4. `ActivityManager` updates the latest activity state;
-5. `IdleLockController` evaluates inactivity and explicit local lock requests;
-6. runtime status observes controller output without seeing raw input;
-7. `WindowsWorkstationLocker` performs the platform lock action.
+5. `MonitorSupervisor` may repair listener availability but cannot create activity;
+6. `IdleLockController` evaluates inactivity and explicit local lock requests;
+7. runtime status observes controller output without seeing raw input;
+8. `WindowsWorkstationLocker` performs the platform lock action.
 
-Startup registration, tray controls, notifications, and resume handling do not
-become new activity sources. Features that infer presence from camera, face,
-Bluetooth, nearby devices, audio, location, or network state belong outside this
-repository.
+Startup registration, tray controls, notifications, resume handling, and monitor
+recovery do not become new activity sources. Features that infer presence from
+camera, face, Bluetooth, nearby devices, audio, location, or network state belong
+outside this repository.
