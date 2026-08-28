@@ -11,6 +11,7 @@ SRC = ROOT / "src"
 LOCAL_ROOTS = {"sentinel_lock"}
 PLATFORM_STDLIB = {"winreg"}
 FORBIDDEN_TEXT = {"pynput", "pystray", "PIL", "PyInstaller", "pyinstaller"}
+FORBIDDEN_MANIFESTS = ("requirements.txt", "pyproject.toml", "setup.py", "setup.cfg")
 
 
 def imported_roots(path: Path) -> set[str]:
@@ -24,21 +25,30 @@ def imported_roots(path: Path) -> set[str]:
     return roots
 
 
+def audit_python_file(path: Path, allowed: set[str], failures: list[str]) -> None:
+    text = path.read_text(encoding="utf-8")
+    for token in FORBIDDEN_TEXT:
+        if token in text:
+            failures.append(
+                f"{path.relative_to(ROOT)} contains forbidden dependency token {token!r}"
+            )
+    for root in sorted(imported_roots(path) - allowed):
+        failures.append(
+            f"{path.relative_to(ROOT)} imports non-stdlib module {root!r}"
+        )
+
+
 def main() -> int:
     allowed = set(sys.stdlib_module_names) | LOCAL_ROOTS | PLATFORM_STDLIB
     failures: list[str] = []
 
     for path in sorted(SRC.rglob("*.py")):
-        text = path.read_text(encoding="utf-8")
-        for token in FORBIDDEN_TEXT:
-            if token in text:
-                failures.append(f"{path.relative_to(ROOT)} contains forbidden dependency token {token!r}")
-        for root in sorted(imported_roots(path) - allowed):
-            failures.append(f"{path.relative_to(ROOT)} imports non-stdlib module {root!r}")
+        audit_python_file(path, allowed, failures)
+    audit_python_file(ROOT / "run_sentinel_lock.py", allowed, failures)
 
-    for manifest in (ROOT / "requirements.txt",):
-        if manifest.exists() and manifest.read_text(encoding="utf-8").strip():
-            failures.append(f"{manifest.name} must be absent or empty")
+    for name in FORBIDDEN_MANIFESTS:
+        if (ROOT / name).exists():
+            failures.append(f"{name} is not allowed in the zero-pip repository")
 
     workflows = ROOT / ".github" / "workflows"
     if workflows.exists():
