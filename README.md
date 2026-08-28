@@ -2,9 +2,10 @@
 
 > Privacy-first automatic workstation locking for Windows using keyboard and mouse activity only.
 
-Sentinel Lock protects an unattended Windows workstation with lightweight local
-keyboard and mouse activity tracking. It records only minimal activity state and
-locks the workstation after a configurable idle period.
+Sentinel Lock is implemented with Python 3.11+ standard-library code plus native
+Windows APIs exposed by the operating system. It has **no pip dependencies** and
+does not require `pynput`, `pystray`, Pillow, PyInstaller, setuptools, or any
+other third-party Python package.
 
 ## Scope
 
@@ -18,76 +19,90 @@ Camera presence detection, face recognition, Bluetooth proximity, trusted-device
 presence, microphone sensing, and other external presence signals are outside the
 project scope.
 
+## Scratch / dependency boundary
+
+Application logic and Windows integration code live in this repository. Native
+Windows functionality is accessed directly with Python `ctypes` and stdlib
+modules:
+
+- `SetWindowsHookExW` / `CallNextHookEx` for keyboard and mouse occurrence hooks;
+- `Shell_NotifyIconW` plus a Win32 hidden-window message loop for tray controls and notifications;
+- `LockWorkStation` for native workstation locking;
+- `winreg` with `HKEY_CURRENT_USER` for optional per-user startup registration.
+
+The hook adapters deliberately do not dereference keyboard payloads, pointer
+coordinates, or mouse-button identity. Only minimal activity categories reach
+application state.
+
 ## Current status
 
-Implemented today:
+Implemented:
 
+- scratch Win32 keyboard and mouse hook listeners;
 - thread-safe keyboard and mouse activity tracking;
-- deterministic filtering of isolated mouse-movement jitter;
+- deterministic isolated-movement filtering;
 - meaningful movement confirmation using two callbacks within 250 ms;
 - continuous mouse-movement refresh limited to once every 500 ms;
-- immediate keyboard and pressed-click activity refresh;
 - configurable idle detection;
-- native Windows workstation locking;
+- direct `LockWorkStation` integration;
 - one lock request per idle episode;
-- recovery after new accepted keyboard or mouse activity;
-- automatic restart of unexpectedly stopped built-in keyboard/mouse listeners;
-- retry after transient listener restart failure;
-- Windows system tray with Status, Lock now, and Exit controls;
-- privacy-safe desktop notifications;
-- optional per-user Windows startup registration;
+- listener health checks and recovery;
+- scratch Win32 tray with Status, Lock now, Exit, and local notifications;
+- per-user Windows startup registration;
 - resume-like gap detection with safe idle re-baselining;
-- high-frequency keyboard/mouse regression stress tests;
-- bounded CI CPU/memory guards for input processing;
-- 1,000-episode long-run duplicate-lock stability simulation;
-- graceful background-service lifecycle;
-- rotating operational logs with no raw input data;
-- dry-run configuration checks;
-- deterministic unit tests for activity, filtering, timing, recovery, runtime controls,
-  startup registration, resume handling, lock decisions, and failure handling.
-
-Raw key values, mouse buttons, pointer coordinates, and private user content are
-not retained or sent remotely. Mouse movement filtering uses callback timing only;
-it does not keep pointer positions.
+- high-frequency CPU/memory regression tests;
+- long-run duplicate-lock stability tests;
+- pip-free CI and release validation;
+- stdlib `zipapp` release artifact with SHA-256 checksum.
 
 ## Requirements
 
 - Windows 10 or Windows 11
 - Python 3.11 or newer
+- no pip packages
 
-## Quick start
+## Quick start from source
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
-sentinel-lock --config config/default.toml
-```
-
-The default idle timeout is 300 seconds. To test without locking the machine:
+No installation is required:
 
 ```powershell
-sentinel-lock --dry-run --timeout 10
+python .\run_sentinel_lock.py --config config/default.toml
 ```
 
-Validate a configuration file and exit:
+Safe dry run:
 
 ```powershell
-sentinel-lock --config config/default.toml --check-config
+python .\run_sentinel_lock.py --dry-run --timeout 10
 ```
 
-The Windows tray is enabled by default. It shows the current idle/lock status and
-provides **Lock now** and **Exit** controls. Optional runtime commands:
+Validate configuration:
 
 ```powershell
-sentinel-lock --no-tray
-sentinel-lock --no-notifications
-sentinel-lock --install-startup
-sentinel-lock --startup-status
-sentinel-lock --remove-startup
+python .\run_sentinel_lock.py --config config/default.toml --check-config
 ```
 
-Stop a foreground process with `Ctrl+C` or use **Exit** from the tray.
+Optional runtime commands:
+
+```powershell
+python .\run_sentinel_lock.py --no-tray
+python .\run_sentinel_lock.py --no-notifications
+python .\run_sentinel_lock.py --install-startup
+python .\run_sentinel_lock.py --startup-status
+python .\run_sentinel_lock.py --remove-startup
+```
+
+## Stdlib release artifact
+
+Build a single-file Python zip application using only the standard library:
+
+```powershell
+New-Item -ItemType Directory -Force dist | Out-Null
+python -m zipapp src -m "sentinel_lock.cli:main" -o dist/sentinel-lock.pyz
+python .\dist\sentinel-lock.pyz --version
+```
+
+The `.pyz` artifact still requires Python 3.11+ on the Windows machine. Sentinel
+Lock intentionally does not bundle a third-party frozen Python runtime.
 
 ## Configuration
 
@@ -105,60 +120,52 @@ max_bytes = 1048576
 backup_count = 3
 ```
 
-Command-line `--timeout` and `--poll-interval` values override the file.
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for validation rules and
-operational guidance.
-
 ## Project structure
 
 ```text
 sentinel-lock/
-├── config/                  Default runtime configuration
-├── docs/                    Architecture, security, and development guides
-├── src/sentinel_lock/       Application package
-│   ├── monitors/            Keyboard and mouse adapters
-│   ├── activity.py          Thread-safe activity state
-│   ├── app.py               Runtime orchestration
-│   ├── cli.py               Command-line interface
-│   ├── config.py            TOML configuration loader
-│   ├── idle.py              Idle tracking and lock decision logic
-│   ├── locker.py            Windows locking adapter
-│   ├── reliability.py       Input-monitor health and recovery supervisor
-│   ├── resume.py            Suspend/resume-like gap detection
-│   ├── runtime_ui.py        Tray controls, status, and notifications
-│   ├── startup.py           Per-user Windows startup registration
-│   └── logging_setup.py     Privacy-safe rotating logs
-└── tests/                   Cross-platform unit and reliability tests
+├── config/
+├── docs/
+├── run_sentinel_lock.py       No-install source launcher
+├── src/sentinel_lock/
+│   ├── monitors/              Keyboard/mouse policy adapters
+│   ├── win32_input.py         Scratch low-level Win32 input hooks
+│   ├── win32_tray.py          Scratch notification-area backend
+│   ├── activity.py            Minimal activity state
+│   ├── idle.py                Idle and lock policy
+│   ├── locker.py              Direct LockWorkStation adapter
+│   ├── reliability.py         Listener recovery supervisor
+│   ├── resume.py              Resume-gap detection
+│   ├── runtime_ui.py          Runtime UI boundary
+│   └── startup.py             Per-user startup registration
+└── tests/
 ```
+
+## Dependency proof
+
+CI runs:
+
+```powershell
+python tests/check_stdlib_only.py
+python -m unittest discover -s tests -v
+python -m compileall -q src tests run_sentinel_lock.py
+```
+
+`check_stdlib_only.py` rejects non-stdlib imports in application source, non-empty
+pip requirements, `pip install` workflow steps, and the removed third-party
+input/tray/packaging libraries.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Activity Manager module](docs/modules/ACTIVITY_MANAGER.md)
-- [Mouse Monitor module / M4 rules](docs/modules/MOUSE_MONITOR.md)
-- [Runtime Experience / M5](docs/RUNTIME_EXPERIENCE.md)
-- [Reliability and Performance / M6](docs/M6_RELIABILITY.md)
-- [Configuration](docs/CONFIGURATION.md)
+- [Stdlib-only boundary](docs/STDLIB_ONLY.md)
+- [Runtime Experience](docs/RUNTIME_EXPERIENCE.md)
+- [Reliability and Performance](docs/M6_RELIABILITY.md)
+- [Install, Upgrade, Remove](docs/INSTALL_UPGRADE_REMOVE.md)
+- [Release validation](docs/RELEASE_VALIDATION.md)
 - [Security model](docs/SECURITY.md)
-- [Development guide](docs/DEVELOPMENT.md)
+- [Threat model](docs/THREAT_MODEL.md)
 - [Roadmap](docs/ROADMAP.md)
-
-## Development
-
-```powershell
-python -m unittest discover -s tests -v
-python -m compileall -q src tests
-```
-
-The test suite uses fake input listeners, clocks, lockers, and registry adapters,
-so it does not lock the workstation or require an active desktop session. M6
-performance checks are regression ceilings for CI, not hardware benchmark claims.
-
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Keep
-changes small, include tests, and preserve the keyboard/mouse-only privacy-first
-architecture.
 
 ## License
 
