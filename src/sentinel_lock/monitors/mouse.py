@@ -165,6 +165,6 @@ class MouseMonitor:
 
     @staticmethod
     def _default_factory() -> ListenerFactory:
-        from pynput import mouse
+        from sentinel_lock.win32_input import Win32MouseListener
 
-        return mouse.Listener
+        return Win32MouseListener
