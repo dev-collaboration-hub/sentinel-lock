@@ -31,10 +31,15 @@ Implemented today:
 - native Windows workstation locking;
 - one lock request per idle episode;
 - recovery after new accepted keyboard or mouse activity;
+- Windows system tray with Status, Lock now, and Exit controls;
+- privacy-safe desktop notifications;
+- optional per-user Windows startup registration;
+- resume-like gap detection with safe idle re-baselining;
 - graceful background-service lifecycle;
 - rotating operational logs with no raw input data;
 - dry-run configuration checks;
-- deterministic unit tests for activity, filtering, timing, lock decisions, and failure handling.
+- deterministic unit tests for activity, filtering, timing, runtime controls,
+  startup registration, resume handling, lock decisions, and failure handling.
 
 Raw key values, mouse buttons, pointer coordinates, and private user content are
 not retained or sent remotely. Mouse movement filtering uses callback timing only;
@@ -66,7 +71,18 @@ Validate a configuration file and exit:
 sentinel-lock --config config/default.toml --check-config
 ```
 
-Stop the foreground process with `Ctrl+C`.
+The Windows tray is enabled by default. It shows the current idle/lock status and
+provides **Lock now** and **Exit** controls. Optional runtime commands:
+
+```powershell
+sentinel-lock --no-tray
+sentinel-lock --no-notifications
+sentinel-lock --install-startup
+sentinel-lock --startup-status
+sentinel-lock --remove-startup
+```
+
+Stop a foreground process with `Ctrl+C` or use **Exit** from the tray.
 
 ## Configuration
 
@@ -102,6 +118,9 @@ sentinel-lock/
 │   ├── config.py            TOML configuration loader
 │   ├── idle.py              Idle tracking and lock decision logic
 │   ├── locker.py            Windows locking adapter
+│   ├── resume.py            Suspend/resume-like gap detection
+│   ├── runtime_ui.py        Tray controls, status, and notifications
+│   ├── startup.py           Per-user Windows startup registration
 │   └── logging_setup.py     Privacy-safe rotating logs
 └── tests/                   Cross-platform unit tests
 ```
@@ -111,6 +130,7 @@ sentinel-lock/
 - [Architecture](docs/ARCHITECTURE.md)
 - [Activity Manager module](docs/modules/ACTIVITY_MANAGER.md)
 - [Mouse Monitor module / M4 rules](docs/modules/MOUSE_MONITOR.md)
+- [Runtime Experience / M5](docs/RUNTIME_EXPERIENCE.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Security model](docs/SECURITY.md)
 - [Development guide](docs/DEVELOPMENT.md)
@@ -123,8 +143,8 @@ python -m unittest discover -s tests -v
 python -m compileall -q src tests
 ```
 
-The test suite uses fake input listeners and a fake clock, so it does not lock
-the workstation or require an active desktop session.
+The test suite uses fake input listeners, clocks, lockers, and registry adapters,
+so it does not lock the workstation or require an active desktop session.
 
 ## Contributing
 
