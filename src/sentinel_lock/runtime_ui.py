@@ -90,7 +90,7 @@ class TrayRuntimeExperience:
         draw.arc((20, 7, 44, 38), 180, 360, fill="black", width=5)
 
         menu = pystray.Menu(
-            pystray.MenuItem(self._status_text, None, enabled=False),
+            pystray.MenuItem(self._status_text, self._status_noop, enabled=False),
             pystray.MenuItem("Lock now", self._lock_now),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Exit", self._exit),
@@ -142,6 +142,10 @@ class TrayRuntimeExperience:
         if snapshot.state is ControllerState.LOCKED:
             return "Status: lock requested"
         return f"Status: active - idle {snapshot.idle_seconds:.0f}s"
+
+    @staticmethod
+    def _status_noop(_icon: Any, _item: Any) -> None:
+        return None
 
     def _lock_now(self, _icon: Any, _item: Any) -> None:
         controller = self._controller
