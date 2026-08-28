@@ -2,39 +2,50 @@
 
 ## Protected asset
 
-Sentinel Lock reduces the chance that an unattended Windows session stays usable after keyboard and mouse inactivity.
+Sentinel Lock reduces the chance that an unattended Windows session remains
+usable after keyboard and mouse inactivity.
 
 ## Trust boundary
 
-The core accepts only local keyboard presses, meaningful mouse movement, and mouse clicks. Camera, microphone, Bluetooth, network presence, location, and remote policy sources are outside the repository boundary.
+The core accepts only local keyboard press occurrence, meaningful mouse movement
+occurrence, and mouse click occurrence. Camera, microphone, Bluetooth, network
+presence, location, and remote policy sources are outside the repository boundary.
 
 ## Threats considered
 
-- accidental unattended-session exposure;
-- mouse sensor jitter preventing an idle lock;
-- transient keyboard or mouse hook failure;
+- unattended-session exposure;
+- mouse sensor jitter preventing idle lock;
+- transient keyboard/mouse hook failure;
 - duplicate lock requests during one idle episode;
-- raw key, mouse button, or pointer-coordinate retention;
+- raw key/button/coordinate retention;
 - startup registration escaping the current Windows user;
-- unsigned or tampered release artifacts;
-- runtime UI bypassing the controller and calling platform lock APIs directly.
+- tampered release artifact;
+- runtime UI bypassing the controller;
+- reintroduction of third-party runtime dependencies.
 
 ## Mitigations
 
 - deterministic idle threshold and one-lock-per-episode guard;
-- timing-only movement confirmation and rate limiting;
-- monitor health probing with bounded restart attempts on later polls;
-- raw input values discarded at callback boundaries;
+- timing-only movement confirmation/rate limiting;
+- repository-owned low-level Win32 hooks;
+- hook payload structures are not dereferenced;
+- monitor health probing and restart;
 - startup uses `HKEY_CURRENT_USER` only;
-- tray `Lock now` queues a controller request rather than calling Windows APIs;
-- tagged release workflow refuses to publish without production signing secrets;
-- tagged Windows executable must pass Authenticode validation before publication;
-- release artifacts include SHA-256 checksums.
+- tray Lock now queues a controller request;
+- SHA-256 checksum for the stdlib `.pyz` release artifact;
+- CI parses application imports and rejects non-stdlib dependency roots;
+- CI/release workflows reject pip-install and former third-party packager paths.
 
 ## Explicit non-goals
 
-Sentinel Lock is not an authentication replacement, malware defense, anti-tamper kernel component, remote device-management agent, or biometric presence detector. An attacker already controlling the user account or process can terminate or modify a user-space utility.
+Sentinel Lock is not an authentication replacement, malware defense, anti-tamper
+kernel component, remote device-management agent, biometric presence detector, or
+raw NT syscall project. It is a user-space Win32 utility implemented through
+Python standard-library `ctypes`.
 
 ## Residual risks
 
-Input hooks, tray behavior, Windows power transitions, Authenticode trust chains, accessibility behavior, and multi-user startup semantics depend on the real Windows environment. These require release-candidate validation on physical/interactive Windows systems in addition to CI.
+Low-level hooks, tray behavior, Windows power transitions, accessibility behavior,
+and real multi-user startup semantics depend on an interactive Windows
+environment. The `.pyz` artifact also depends on the integrity of the installed
+Python interpreter. These require release-candidate validation beyond hosted CI.
