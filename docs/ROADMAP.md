@@ -49,13 +49,15 @@ Status: implemented.
 
 ## M5 — Runtime Experience
 
-- system tray controls;
-- desktop notifications;
-- optional Windows startup registration;
-- suspend and resume handling;
-- clear idle and lock status without exposing private input data.
+- Windows system tray with privacy-safe Status, Lock now, and Exit controls;
+- desktop notifications for lock requests and resume re-baselining;
+- optional per-user Windows startup registration and status/removal commands;
+- suspend/resume-like gap detection with safe idle re-baselining;
+- clear idle and lock status without exposing private input data;
+- deterministic tests for runtime controls, resume behavior, startup registration,
+  lifecycle, and privacy-safe status.
 
-Status: planned.
+Status: implemented.
 
 ## M6 — Reliability and Performance
 
