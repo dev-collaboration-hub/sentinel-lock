@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import subprocess
 import sys
 from typing import Any, Sequence
@@ -16,11 +17,16 @@ class StartupRegistrationError(RuntimeError):
 
 
 def build_startup_command(argv: Sequence[str] | None = None) -> str:
-    """Build a safely quoted command for starting Sentinel Lock at sign-in."""
+    """Build a safely quoted no-install command for Windows sign-in startup."""
 
-    parts = [sys.executable, "-m", "sentinel_lock"]
-    if argv:
-        parts.extend(argv)
+    args = list(argv or ())
+    invoked = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else None
+    if invoked is not None and invoked.suffix.lower() == ".pyz":
+        parts = [sys.executable, str(invoked), *args]
+    else:
+        repository_root = Path(__file__).resolve().parents[2]
+        launcher = repository_root / "run_sentinel_lock.py"
+        parts = [sys.executable, str(launcher), *args]
     return subprocess.list2cmdline(parts)
 
 
