@@ -1,11 +1,22 @@
 # Sentinel Lock
 
-> Privacy-first adaptive workstation locking for Windows.
+> Privacy-first automatic workstation locking for Windows using keyboard and mouse activity only.
 
-Sentinel Lock protects an unattended Windows workstation using lightweight local
-signals. Keyboard and mouse inactivity provide the working baseline. Optional
-presence and trusted-device signals can delay locking without being coupled to
-the Windows locking code.
+Sentinel Lock protects an unattended Windows workstation with lightweight local
+keyboard and mouse activity tracking. It records only minimal activity state and
+locks the workstation after a configurable idle period.
+
+## Scope
+
+Sentinel Lock intentionally uses only:
+
+- keyboard key-press activity;
+- mouse movement activity;
+- mouse click activity.
+
+Camera presence detection, face recognition, Bluetooth proximity, trusted-device
+presence, microphone sensing, and other external presence signals are outside the
+project scope.
 
 ## Current status
 
@@ -14,32 +25,15 @@ Implemented today:
 - thread-safe keyboard and mouse activity tracking;
 - configurable idle detection;
 - native Windows workstation locking;
-- simple lock decision logic for idle time and optional local signals;
-- optional `user_present` and `trusted_device_nearby` inputs;
+- one lock request per idle episode;
+- recovery after new keyboard or mouse activity;
 - graceful background-service lifecycle;
 - rotating operational logs with no raw input data;
 - dry-run configuration checks;
 - unit tests for activity, timing, lock decisions, and failure handling.
 
-If no extra presence signal is connected, Sentinel Lock keeps the existing
-idle-time behavior. Unknown or failed optional signals do not disable baseline
-protection.
-
-## Project direction
-
-Sentinel Lock is not limited to keyboard and mouse inactivity. Future optional
-local adapters can provide signals from:
-
-- computer-vision presence detection;
-- local face recognition;
-- Bluetooth phone proximity;
-- trusted-device detection;
-- system tray controls and desktop notifications;
-- cross-platform support.
-
-These adapters should remain optional and local-first. Raw keystrokes, pointer
-coordinates, camera frames, and private user content must not be logged or sent
-remotely by the core application.
+Raw key values, pointer coordinates, and private user content are not retained or
+sent remotely.
 
 ## Requirements
 
@@ -129,7 +123,8 @@ the workstation or require an active desktop session.
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Keep
-changes small, include tests, and preserve the privacy-first local architecture.
+changes small, include tests, and preserve the keyboard/mouse-only privacy-first
+architecture.
 
 ## License
 
