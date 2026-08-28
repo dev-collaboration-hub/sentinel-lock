@@ -2,62 +2,66 @@
 
 ## Environment
 
-Sentinel Lock supports Python 3.11 and newer. The runtime target is Windows, but
-the core tests are intentionally platform-independent.
+Sentinel Lock supports Python 3.11+ and uses no pip packages.
+
+Run directly from the repository root:
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+python .\run_sentinel_lock.py --version
 ```
+
+No virtual environment or package installation is required.
 
 ## Validation
 
-Run before every pull request:
+Run before every change:
 
 ```powershell
+python tests\check_stdlib_only.py
+$env:PYTHONPATH = "src"
 python -m unittest discover -s tests -v
-python -m compileall -q src tests
+python -m compileall -q src tests run_sentinel_lock.py
 ```
 
-For a manual Windows smoke test:
+Manual Windows smoke test:
 
 ```powershell
-sentinel-lock --check-config
-sentinel-lock --dry-run --timeout 10
-sentinel-lock --timeout 10
+python .\run_sentinel_lock.py --check-config
+python .\run_sentinel_lock.py --dry-run --timeout 10
+python .\run_sentinel_lock.py --timeout 10
 ```
 
-The final command will lock the active workstation.
+The final command can lock the active workstation.
 
 ## Design rules
 
+- Python standard library + Windows system APIs only.
+- No pip/runtime dependencies.
 - Keep input callbacks constant-time.
 - Use monotonic time for durations.
-- Inject platform or timing dependencies into policy components.
-- Never log key values, button values, pointer coordinates, or user content.
+- Keep Windows API access behind small adapters.
+- Never retain/log key values, mouse buttons, pointer coordinates, or user content.
 - Do not add network calls or telemetry.
-- Raise clear startup errors when a required monitor cannot start.
-- Include tests for success, boundary, and failure behavior.
+- Raise clear startup errors when native hooks cannot start.
+- Preserve deterministic tests by injecting fake listener factories where possible.
 
 ## Test strategy
 
-The suite uses:
+The suite uses fake clocks, lockers, listener factories, registry adapters, and
+runtime backends for deterministic policy tests. Windows CI additionally imports
+and exercises event mapping in the repository-owned `ctypes` Win32 adapters.
 
-- a controllable fake clock for deterministic idle duration;
-- a recording locker for lock-attempt assertions;
-- fake `pynput` listener factories for callback and lifecycle behavior;
-- temporary directories for configuration and logging tests.
+Unit tests do not attach real global input hooks or call `LockWorkStation` on the
+CI machine. Physical desktop hook/tray behavior remains an explicit interactive
+Windows smoke test.
 
-Unit tests must never call `LockWorkStation` or attach real keyboard/mouse hooks.
+## Modifying native input
 
-## Modifying an input monitor
+`win32_input.py` is the only scratch low-level hook implementation. Changes must:
 
-The runtime supports keyboard presses, mouse movement, and mouse clicks only.
-Any monitor change must:
-
-1. publish one of the existing `ActivityKind` values;
-2. discard raw key, button, and pointer data;
-3. keep callbacks constant-time;
-4. preserve start, stop, and bounded-join behaviour;
-5. include deterministic tests with fake listeners.
+1. preserve `CallNextHookEx`;
+2. clean up hooks with `UnhookWindowsHookEx`;
+3. retain only input occurrence, never hook payload content;
+4. preserve monitor health/restart semantics;
+5. keep fake-listener monitor tests working;
+6. pass the stdlib-only dependency gate.
