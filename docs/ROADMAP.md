@@ -1,8 +1,8 @@
 # Roadmap
 
-Sentinel Lock is intentionally limited to keyboard and mouse activity. Camera,
-face recognition, Bluetooth proximity, trusted-device presence, microphone
-sensing, and other external presence signals are out of scope.
+Sentinel Lock is intentionally limited to keyboard and mouse activity and is now
+implemented with **Python standard library + Windows system APIs only**. There are
+no pip/runtime package dependencies.
 
 ## M1 — Activity Monitoring
 
@@ -27,62 +27,77 @@ Status: implemented.
 
 ## M3 — Keyboard/Mouse Lock Core
 
-- keep keyboard and mouse activity as the only activity sources;
-- use one small deterministic idle-lock decision path;
-- lock when the configured inactivity threshold is reached;
-- rearm after new keyboard or mouse activity;
-- preserve privacy by discarding raw input content.
+- keyboard and mouse remain the only activity sources;
+- deterministic idle-lock decision path;
+- lock at configured inactivity threshold;
+- rearm after accepted input;
+- discard raw input content.
 
 Status: implemented.
 
 ## M4 — Advanced Keyboard and Mouse Activity Detection
 
 - filter isolated mouse-movement jitter without retaining pointer coordinates;
-- confirm meaningful movement with two callbacks inside a 250 ms window;
-- rate-limit continuous movement activity refresh to once every 500 ms;
-- preserve immediate keyboard and pressed-click activity updates;
-- reset pending movement confirmation after a pressed click;
-- add deterministic tests for filtering, refresh behavior, and privacy boundaries;
-- document the exact movement rules and constants.
+- confirm meaningful movement with two callbacks inside 250 ms;
+- rate-limit continuous movement refresh to once every 500 ms;
+- preserve immediate keyboard and pressed-click activity;
+- deterministic privacy and timing tests.
 
 Status: implemented.
 
 ## M5 — Runtime Experience
 
-- Windows system tray with privacy-safe Status, Lock now, and Exit controls;
-- desktop notifications for lock requests and resume re-baselining;
-- optional per-user Windows startup registration and status/removal commands;
-- suspend/resume-like gap detection with safe idle re-baselining;
-- clear idle and lock status without exposing private input data;
-- deterministic tests for runtime controls, resume behavior, startup registration,
-  lifecycle, and privacy-safe status.
+- native Windows notification-area controls;
+- Status, Lock now, and Exit;
+- local notifications;
+- optional per-user Windows startup registration;
+- resume-like gap handling;
+- privacy-safe status.
 
 Status: implemented.
 
 ## M6 — Reliability and Performance
 
-- high-frequency keyboard and mouse stress tests with deterministic CI guards;
-- built-in listener health probing and restart after transient input-hook failure;
-- retry on a later poll after transient restart failure;
-- bounded process-CPU and Python traced-memory regression ceilings;
-- 1,000-episode long-run stability simulation;
-- protection against duplicate automatic and runtime-requested locks;
-- validation that M4 movement filtering remains bounded under high event rates;
-- dedicated reliability and performance evidence documentation.
+- high-frequency keyboard/mouse stress tests;
+- listener health probing and restart;
+- retry after transient hook restart failure;
+- CPU/memory regression ceilings;
+- 1,000-episode stability simulation;
+- duplicate-lock protection;
+- no-busy-spin controller guard.
 
 Status: implemented.
 
 ## M7 — Release Hardening
 
-- Windows single-file packaging and smoke test in normal CI;
-- tagged release workflow with fail-closed production Authenticode signing gate;
-- SHA-256 release checksum generation;
-- deterministic per-user startup isolation tests;
-- deterministic no-busy-spin power guard plus M6 CPU/memory ceilings;
-- threat-model review and residual-risk documentation;
-- installation, upgrade, and removal documentation;
-- explicit interactive Windows validation checklist for multi-user, accessibility,
-  power/suspend/resume, and production signing;
-- stable v1.0 publication only after all external release-candidate gates pass.
+- stdlib-only dependency gate;
+- no `requirements.txt` or setuptools package manifest;
+- direct Win32 keyboard/mouse hooks through `ctypes`;
+- direct Win32 tray/notification backend through `ctypes`;
+- pip-free source execution;
+- pip-free CI and release workflows;
+- stdlib `zipapp` release artifact;
+- SHA-256 checksum generation;
+- per-user startup isolation tests;
+- threat model and install/upgrade/remove documentation;
+- interactive real-Windows validation checklist.
 
-Status: repository hardening implemented; production release verification pending trusted code-signing credentials and interactive Windows release-candidate validation.
+Status: repository implementation complete; interactive physical Windows
+keyboard/mouse, tray, multi-user, and power/suspend-resume release-candidate checks
+remain external validation evidence.
+
+## Dependency boundary
+
+Allowed:
+
+- Python 3.11+ standard library;
+- Windows APIs supplied by the operating system;
+- repository-owned source.
+
+Not allowed:
+
+- pip runtime dependencies;
+- package-installed keyboard/mouse hooks;
+- package-installed tray/UI frameworks;
+- third-party frozen-app packagers;
+- hidden hosted services.
