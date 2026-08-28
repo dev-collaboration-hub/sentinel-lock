@@ -19,14 +19,6 @@ class WorkstationLocker(Protocol):
         """Request a workstation lock or raise on failure."""
 
 
-@dataclass(frozen=True, slots=True)
-class PresenceSignals:
-    """Optional local signals used by the lock decision."""
-
-    user_present: bool | None = None
-    trusted_device_nearby: bool | None = None
-
-
 class ControllerState(str, Enum):
     ACTIVE = "active"
     LOCKED = "locked"
@@ -40,24 +32,14 @@ class IdleEvaluation:
     lock_requested: bool
 
 
-def should_lock(
-    idle_seconds: float,
-    idle_timeout_seconds: float,
-    signals: PresenceSignals | None = None,
-) -> bool:
-    """Return whether the current state requires a workstation lock."""
+def should_lock(idle_seconds: float, idle_timeout_seconds: float) -> bool:
+    """Return whether keyboard/mouse inactivity requires a workstation lock."""
 
-    if idle_seconds < idle_timeout_seconds:
-        return False
-    if signals is not None and (
-        signals.user_present is True or signals.trusted_device_nearby is True
-    ):
-        return False
-    return True
+    return idle_seconds >= idle_timeout_seconds
 
 
 class IdleLockController:
-    """Request at most one workstation lock per idle episode."""
+    """Request at most one workstation lock per keyboard/mouse idle episode."""
 
     def __init__(
         self,
@@ -68,7 +50,6 @@ class IdleLockController:
         poll_interval_seconds: float,
         clock: Callable[[], float] = monotonic,
         logger: logging.Logger | None = None,
-        signal_reader: Callable[[], PresenceSignals] | None = None,
     ) -> None:
         if idle_timeout_seconds <= 0:
             raise ValueError("idle_timeout_seconds must be positive")
@@ -81,7 +62,6 @@ class IdleLockController:
         self._poll_interval_seconds = poll_interval_seconds
         self._clock = clock
         self._logger = logger or logging.getLogger(__name__)
-        self._signal_reader = signal_reader
         self._observed_sequence = activity_manager.snapshot().sequence
         self._armed = True
         self._state = ControllerState.ACTIVE
@@ -100,19 +80,9 @@ class IdleLockController:
             self._state = ControllerState.ACTIVE
 
         idle_seconds = snapshot.idle_seconds(self._clock())
-        signals = None
-        if self._signal_reader is not None:
-            try:
-                signals = self._signal_reader()
-            except Exception:
-                self._logger.exception("Presence signal reader failed")
 
         lock_requested = False
-        if self._armed and should_lock(
-            idle_seconds,
-            self._idle_timeout_seconds,
-            signals,
-        ):
+        if self._armed and should_lock(idle_seconds, self._idle_timeout_seconds):
             try:
                 self._locker.lock()
             except Exception:
