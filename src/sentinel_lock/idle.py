@@ -58,6 +58,7 @@ class IdleLockController:
         resume_detector: ResumePoller | None = None,
         evaluation_observer: Callable[[IdleEvaluation], None] | None = None,
         resume_observer: Callable[[], None] | None = None,
+        maintenance_callback: Callable[[], object] | None = None,
     ) -> None:
         if idle_timeout_seconds <= 0:
             raise ValueError("idle_timeout_seconds must be positive")
@@ -73,6 +74,7 @@ class IdleLockController:
         self._resume_detector = resume_detector
         self._evaluation_observer = evaluation_observer
         self._resume_observer = resume_observer
+        self._maintenance_callback = maintenance_callback
         self._observed_sequence = activity_manager.snapshot().sequence
         self._armed = True
         self._state = ControllerState.ACTIVE
@@ -145,6 +147,8 @@ class IdleLockController:
         """Run lock evaluations until shutdown is requested."""
 
         while not stop_event.is_set():
+            self._call_maintenance_callback()
+
             if self._resume_detector is not None:
                 try:
                     resumed = self._resume_detector.poll()
@@ -158,6 +162,14 @@ class IdleLockController:
             evaluation = self.evaluate_once()
             self._call_evaluation_observer(evaluation)
             stop_event.wait(self._poll_interval_seconds)
+
+    def _call_maintenance_callback(self) -> None:
+        if self._maintenance_callback is None:
+            return
+        try:
+            self._maintenance_callback()
+        except Exception:
+            self._logger.exception("Runtime maintenance callback failed")
 
     def _call_evaluation_observer(self, evaluation: IdleEvaluation) -> None:
         if self._evaluation_observer is None:
