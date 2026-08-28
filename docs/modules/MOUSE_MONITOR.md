@@ -1,39 +1,35 @@
 # Mouse Monitor Module
 
-## M4 behavior
+## Native input source
 
-`MouseMonitor` keeps Sentinel Lock keyboard/mouse-only while filtering isolated
-pointer jitter without retaining pointer coordinates.
+`MouseMonitor` receives occurrence callbacks from the repository-owned
+`Win32MouseListener` in `src/sentinel_lock/win32_input.py`.
 
-### Meaningful movement rule
+The listener installs `WH_MOUSE_LL` with `SetWindowsHookExW` through Python
+`ctypes`. It does **not** dereference `MSLLHOOKSTRUCT`, so real pointer coordinates
+and mouse-button identity never enter Sentinel Lock.
 
-Mouse movement is considered meaningful when:
+For compatibility with the monitor callback boundary it emits placeholder
+`(0, 0)` coordinates and `None` button identity; `MouseMonitor` ignores those
+values.
 
-1. one movement callback starts a candidate movement burst;
-2. a second movement callback arrives within **250 ms**;
-3. the confirmed burst refreshes activity as `MOUSE_MOVE`;
-4. while movement continues, activity refresh is limited to at most once every
-   **500 ms**;
-5. a gap longer than 250 ms resets the candidate burst, so a new isolated move
-   does not refresh activity by itself.
+## M4 meaningful movement rule
 
-The filter is deterministic and based only on monotonic callback timing. The
-`x` and `y` values supplied by `pynput` are ignored immediately and are never
-stored, logged, or sent elsewhere.
+1. one movement occurrence starts a candidate burst;
+2. a second movement occurrence within **250 ms** confirms meaningful movement;
+3. the burst refreshes activity as `MOUSE_MOVE`;
+4. continuous movement refresh is limited to once every **500 ms**;
+5. a gap longer than 250 ms starts a new candidate burst.
 
-### Click and keyboard behavior
+The filter stores only monotonic timing state.
 
-- A pressed mouse click refreshes activity immediately.
-- Mouse-button release callbacks do not refresh activity.
-- A pressed click resets any pending movement burst.
-- Keyboard presses continue to refresh activity immediately.
+## Click and keyboard behavior
 
-## Why timing instead of pointer distance
-
-Distance-based filtering would require retaining at least a previous pointer
-position. M4 deliberately avoids that privacy cost. Timing-based burst
-confirmation removes one-off jitter while preserving the existing rule that raw
-pointer coordinates are not retained.
+- mouse button-down occurrence refreshes activity immediately;
+- button identity is discarded by the native hook adapter;
+- a click resets pending movement state;
+- keyboard key-down occurrence refreshes immediately;
+- keyboard hook payloads are not dereferenced.
 
 ## Deterministic constants
 
@@ -43,20 +39,11 @@ pointer coordinates are not retained.
 | Continuous movement refresh interval | 0.50 seconds |
 | Required callbacks for initial confirmation | 2 |
 
-These constants live in `src/sentinel_lock/monitors/mouse.py` and are covered by
-unit tests.
+## Verification
 
-## M4 verification
+`tests/test_monitors.py` verifies filtering and privacy state with fake listeners.
+On Windows, `tests/test_win32_native.py` verifies that the repository-owned native
+adapter maps Win32 messages to occurrence callbacks without payload content.
 
-`tests/test_monitors.py` verifies:
-
-- one isolated movement callback is ignored;
-- two callbacks inside the confirmation window refresh activity;
-- a movement gap beyond the confirmation window resets the burst;
-- continuous movement refresh is rate-limited;
-- pressed clicks remain immediate;
-- release callbacks remain ignored;
-- coordinate values are not added to activity state.
-
-M4 is complete only when the repository unit tests and Python compilation checks
-pass on the supported CI matrix.
+A physical mouse/interactive desktop smoke test remains release-candidate evidence
+because hosted CI does not prove a human-operated Windows desktop hook session.
