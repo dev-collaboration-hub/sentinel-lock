@@ -1,68 +1,86 @@
 # Install, Upgrade, and Remove
 
-## Install
+Sentinel Lock does not use pip installation.
 
-PowerShell:
+## Run from source
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install .
-sentinel-lock --check-config
-```
+Requirements:
 
-For automatic start at sign-in:
+- Windows 10/11;
+- Python 3.11+.
+
+From the repository root:
 
 ```powershell
-sentinel-lock --install-startup
-sentinel-lock --startup-status
+python .\run_sentinel_lock.py --check-config
+python .\run_sentinel_lock.py
 ```
 
-Startup registration is per-user under `HKEY_CURRENT_USER`; it does not create a machine-wide service or administrator startup entry.
+No virtual environment or package installation is required.
 
-## Upgrade
+## Run from the stdlib release artifact
 
-1. Stop Sentinel Lock from the tray or foreground terminal.
-2. Record any custom config path or CLI startup options.
-3. Upgrade the package:
+Build or download `sentinel-lock.pyz`, then:
 
 ```powershell
-python -m pip install --upgrade .
+python .\sentinel-lock.pyz --check-config
+python .\sentinel-lock.pyz
 ```
 
-4. Re-run config validation:
+The `.pyz` requires Python 3.11+ on the target system.
+
+## Automatic startup
+
+From source:
 
 ```powershell
-sentinel-lock --check-config
+python .\run_sentinel_lock.py --install-startup
+python .\run_sentinel_lock.py --startup-status
 ```
 
-5. If the Python environment or executable path changed, refresh startup registration:
+From a `.pyz` release:
 
 ```powershell
-sentinel-lock --remove-startup
-sentinel-lock --install-startup
-sentinel-lock --startup-status
+python .\sentinel-lock.pyz --install-startup
+python .\sentinel-lock.pyz --startup-status
 ```
 
-6. Start Sentinel Lock and verify tray status, keyboard activity, meaningful mouse movement, idle lock behavior, and resume behavior.
+Startup registration is per-user under `HKEY_CURRENT_USER`.
+
+## Upgrade source checkout
+
+1. Stop Sentinel Lock.
+2. Update the repository files.
+3. Run the stdlib dependency gate and config check:
+
+```powershell
+python tests\check_stdlib_only.py
+python .\run_sentinel_lock.py --check-config
+```
+
+4. If the repository path moved, refresh the per-user startup registration.
+
+## Upgrade `.pyz`
+
+1. Stop Sentinel Lock.
+2. Verify the new release SHA-256 checksum.
+3. Replace the old `.pyz` with the new artifact.
+4. Run `--check-config`.
+5. If the artifact path changed, remove and reinstall startup registration.
 
 ## Remove
 
 Remove startup registration first:
 
 ```powershell
-sentinel-lock --remove-startup
+python .\run_sentinel_lock.py --remove-startup
 ```
 
-Then uninstall the Python package:
+or, for a release artifact:
 
 ```powershell
-python -m pip uninstall sentinel-lock
+python .\sentinel-lock.pyz --remove-startup
 ```
 
-Optional user-created files such as custom TOML configuration or logs are not deleted automatically. Delete them manually only when no longer needed.
-
-## Packaged EXE
-
-For a release executable, verify the SHA-256 checksum and Windows digital signature before execution. Tagged GitHub releases are designed to publish only after the release workflow validates the Authenticode signature.
+Then delete the source checkout or `.pyz` file. There is no pip package to
+uninstall. User-created config and log files are not deleted automatically.
